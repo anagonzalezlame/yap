@@ -25,6 +25,7 @@ export interface Ship {
   draft: number; // meters
   callSign: string;
   closestDistance: number; // closest distance to center in meters
+  history?: { time: string; speed: number; heading: number }[];
 }
 
 export interface RecentTransit {

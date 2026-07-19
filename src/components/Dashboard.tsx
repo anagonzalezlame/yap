@@ -21,6 +21,16 @@ import {
   Cpu
 } from 'lucide-react';
 import { Ship, ShipType, RecentTransit } from '../types';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Legend
+} from 'recharts';
 
 // Coordinates
 const CENTER_LAT = -34.920630;
@@ -203,6 +213,65 @@ const INITIAL_MOCK_SHIPS: Ship[] = [
   }
 ];
 
+// Helper to manage telemetry history for a ship
+const updateShipHistory = (
+  history: { time: string; speed: number; heading: number }[] | undefined,
+  currentSpeed: number,
+  currentHeading: number,
+  newSpeed: number,
+  newHeading: number
+) => {
+  let existingHistory = history;
+  if (!existingHistory || existingHistory.length === 0) {
+    // Generate pre-populated historical points with slight variations
+    existingHistory = Array.from({ length: 12 }).map((_, idx) => {
+      const pastTime = new Date(Date.now() - (12 - idx) * 3000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const randomSpeedDev = (Math.random() - 0.5) * 0.6;
+      const randomHeadingDev = Math.round((Math.random() - 0.5) * 8);
+      return {
+        time: pastTime,
+        speed: Math.max(0, parseFloat((currentSpeed + randomSpeedDev).toFixed(1))),
+        heading: (currentHeading + randomHeadingDev + 360) % 360
+      };
+    });
+  }
+
+  const currentTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const updated = [
+    ...existingHistory,
+    {
+      time: currentTimestamp,
+      speed: parseFloat(newSpeed.toFixed(1)),
+      heading: Math.round(newHeading)
+    }
+  ];
+
+  return updated.slice(-15);
+};
+
+// Custom Tooltip component for Recharts
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-[#0b1523]/95 backdrop-blur border border-white/10 rounded-xl p-2.5 shadow-2xl font-mono text-[10px] space-y-1 text-white">
+        <p className="text-cream-medium/50 text-[9px] border-b border-white/5 pb-1 mb-1">Hora: {label}</p>
+        {payload.map((entry: any, index: number) => {
+          const isSpeed = entry.name === 'speed';
+          return (
+            <div key={index} className="flex items-center justify-between gap-4 font-medium">
+              <span className="capitalize text-cream-medium/70">{isSpeed ? 'Velocidad' : 'Rumbo'}:</span>
+              <span className="font-bold" style={{ color: entry.color }}>
+                {entry.value} {isSpeed ? 'nudos' : '°'}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function Dashboard({ 
   searchQuery = '', 
   typeFilter = 'TODOS' 
@@ -218,6 +287,7 @@ export default function Dashboard({
   // State variables
   const [ships, setShips] = useState<Ship[]>(INITIAL_MOCK_SHIPS);
   const [selectedShipId, setSelectedShipId] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState<'specs' | 'chart'>('specs');
   const [totalToday, setTotalToday] = useState(138);
   const [recentTransits, setRecentTransits] = useState<RecentTransit[]>([
     { id: 'TR1', name: 'ROU 04 ARTIGAS', type: 'PESQUERO', timeInZone: 'Hace 2m', closestDistance: 82 },
@@ -228,9 +298,9 @@ export default function Dashboard({
   ]);
 
   // Real-Time AIS WebSocket states
-  const [useRealTime, setUseRealTime] = useState<boolean>(false);
+  const [useRealTime, setUseRealTime] = useState<boolean>(true);
   const [apiKey, setApiKey] = useState<string>(() => {
-    return localStorage.getItem('aisstream_api_key') || (import.meta as any).env?.VITE_AISSTREAM_API_KEY || '';
+    return localStorage.getItem('aisstream_api_key') || '4b5b85805010629518dcf4d58015abad0ff811b1';
   });
   const [wsStatus, setWsStatus] = useState<'offline' | 'connecting' | 'online' | 'error'>('offline');
   const [wsError, setWsError] = useState<string | null>(null);
@@ -337,7 +407,14 @@ export default function Dashboard({
                   heading: heading || oldShip.heading,
                   insideZone: isInside,
                   closestDistance: distance,
-                  lastPosTime: 'hace unos instantes'
+                  lastPosTime: 'hace unos instantes',
+                  history: updateShipHistory(
+                    oldShip.history,
+                    oldShip.speed,
+                    oldShip.heading,
+                    speed || oldShip.speed,
+                    heading || oldShip.heading
+                  )
                 };
               } else {
                 const newShipId = 'LIVE_' + mmsiStr;
@@ -359,6 +436,14 @@ export default function Dashboard({
                   });
                 }
 
+                const nextHistory = updateShipHistory(
+                  undefined,
+                  speed,
+                  heading,
+                  speed,
+                  heading
+                );
+
                 const newShip: Ship = {
                   id: newShipId,
                   name: ShipName?.trim() || `MMSI ${mmsiStr}`,
@@ -378,7 +463,8 @@ export default function Dashboard({
                   width: 18,
                   draft: 5.0,
                   callSign: 'LIVE' + mmsiStr.substring(0, 4),
-                  closestDistance: distance
+                  closestDistance: distance,
+                  history: nextHistory
                 };
                 
                 updatedShips.push(newShip);
@@ -671,7 +757,14 @@ export default function Dashboard({
               speed: nextSpeed,
               heading: nextHeading,
               insideZone: false,
-              closestDistance: 4500
+              closestDistance: 4500,
+              history: updateShipHistory(
+                ship.history,
+                ship.speed,
+                ship.heading,
+                nextSpeed,
+                nextHeading
+              )
             };
           }
 
@@ -700,7 +793,14 @@ export default function Dashboard({
             speed: nextSpeed,
             heading: nextHeading,
             insideZone: isInside,
-            closestDistance: distance
+            closestDistance: distance,
+            history: updateShipHistory(
+              ship.history,
+              ship.speed,
+              ship.heading,
+              nextSpeed,
+              nextHeading
+            )
           };
         });
       });
@@ -921,40 +1021,128 @@ export default function Dashboard({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-white/10 font-mono text-[11px]">
-                <div className="bg-ocean-medium/30 p-2 border border-white/10 rounded-xl">
-                  <span className="text-cream-medium/40 block text-[9px] uppercase tracking-wider">Velocidad</span>
-                  <strong className="text-white text-xs">{activeSelectedShip.speed.toFixed(1)} nudos</strong>
-                </div>
-                <div className="bg-ocean-medium/30 p-2 border border-white/10 rounded-xl">
-                  <span className="text-cream-medium/40 block text-[9px] uppercase tracking-wider">Rumbo</span>
-                  <strong className="text-white text-xs">{activeSelectedShip.heading}°</strong>
-                </div>
-                <div className="bg-ocean-medium/30 p-2 border border-white/10 rounded-xl">
-                  <span className="text-cream-medium/40 block text-[9px] uppercase tracking-wider">Dimensiones</span>
-                  <strong className="text-white text-[10px]">{activeSelectedShip.length}m × {activeSelectedShip.width}m</strong>
-                </div>
-                <div className="bg-ocean-medium/30 p-2 border border-white/10 rounded-xl">
-                  <span className="text-cream-medium/40 block text-[9px] uppercase tracking-wider">Calado</span>
-                  <strong className="text-white text-xs">{activeSelectedShip.draft.toFixed(1)} m</strong>
-                </div>
-                
-                <div className="bg-ocean-medium/30 p-2 border border-white/10 rounded-xl col-span-2 flex justify-between items-center">
-                  <div>
-                    <span className="text-cream-medium/40 block text-[9px] uppercase tracking-wider">Último Reporte</span>
-                    <strong className="text-white text-xs">{activeSelectedShip.lastPosTime}</strong>
-                  </div>
-                  <Clock className="w-4 h-4 text-cream-medium/20" />
-                </div>
-                
-                <div className="bg-ocean-medium/30 p-2 border border-white/10 rounded-xl col-span-2 flex justify-between items-center">
-                  <div>
-                    <span className="text-cream-medium/40 block text-[9px] uppercase tracking-wider">Próximo Puerto</span>
-                    <strong className="text-white text-xs">{activeSelectedShip.nextPort}</strong>
-                  </div>
-                  <Navigation2 className="w-4 h-4 text-cream-medium/20" />
-                </div>
+              <div className="flex border-b border-white/10 gap-4 text-xs font-sans mt-3">
+                <button
+                  onClick={() => setDetailTab('specs')}
+                  className={`pb-2 px-1 font-semibold transition-all relative cursor-pointer ${
+                    detailTab === 'specs' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-cream-medium/40 hover:text-cream-medium/60'
+                  }`}
+                >
+                  Ficha Técnica
+                </button>
+                <button
+                  onClick={() => setDetailTab('chart')}
+                  className={`pb-2 px-1 font-semibold transition-all relative cursor-pointer ${
+                    detailTab === 'chart' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-cream-medium/40 hover:text-cream-medium/60'
+                  }`}
+                >
+                  Historial de Telemetría
+                </button>
               </div>
+
+              {detailTab === 'specs' ? (
+                <div className="grid grid-cols-2 gap-3 pt-2 font-mono text-[11px]">
+                  <div className="bg-ocean-medium/30 p-2 border border-white/10 rounded-xl">
+                    <span className="text-cream-medium/40 block text-[9px] uppercase tracking-wider">Velocidad</span>
+                    <strong className="text-white text-xs">{activeSelectedShip.speed.toFixed(1)} nudos</strong>
+                  </div>
+                  <div className="bg-ocean-medium/30 p-2 border border-white/10 rounded-xl">
+                    <span className="text-cream-medium/40 block text-[9px] uppercase tracking-wider">Rumbo</span>
+                    <strong className="text-white text-xs">{activeSelectedShip.heading}°</strong>
+                  </div>
+                  <div className="bg-ocean-medium/30 p-2 border border-white/10 rounded-xl">
+                    <span className="text-cream-medium/40 block text-[9px] uppercase tracking-wider">Dimensiones</span>
+                    <strong className="text-white text-[10px]">{activeSelectedShip.length}m × {activeSelectedShip.width}m</strong>
+                  </div>
+                  <div className="bg-ocean-medium/30 p-2 border border-white/10 rounded-xl">
+                    <span className="text-cream-medium/40 block text-[9px] uppercase tracking-wider">Calado</span>
+                    <strong className="text-white text-xs">{activeSelectedShip.draft.toFixed(1)} m</strong>
+                  </div>
+                  
+                  <div className="bg-ocean-medium/30 p-2 border border-white/10 rounded-xl col-span-2 flex justify-between items-center">
+                    <div>
+                      <span className="text-cream-medium/40 block text-[9px] uppercase tracking-wider">Último Reporte</span>
+                      <strong className="text-white text-xs">{activeSelectedShip.lastPosTime}</strong>
+                    </div>
+                    <Clock className="w-4 h-4 text-cream-medium/20" />
+                  </div>
+                  
+                  <div className="bg-ocean-medium/30 p-2 border border-white/10 rounded-xl col-span-2 flex justify-between items-center">
+                    <div>
+                      <span className="text-cream-medium/40 block text-[9px] uppercase tracking-wider">Próximo Puerto</span>
+                      <strong className="text-white text-xs">{activeSelectedShip.nextPort}</strong>
+                    </div>
+                    <Navigation2 className="w-4 h-4 text-cream-medium/20" />
+                  </div>
+                </div>
+              ) : (
+                <div className="pt-2 space-y-2">
+                  <div className="flex items-center justify-between text-[10px] text-cream-medium/50 font-mono">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                      Velocidad (nudos)
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                      Rumbo (°)
+                    </span>
+                  </div>
+                  <div className="h-[175px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={activeSelectedShip.history || []} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                        <XAxis 
+                          dataKey="time" 
+                          stroke="#94a3b8" 
+                          fontSize={8}
+                          tickLine={false}
+                          axisLine={false}
+                          dy={5}
+                        />
+                        <YAxis 
+                          yAxisId="left"
+                          stroke="#22d3ee" 
+                          fontSize={8}
+                          domain={['auto', 'auto']}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <YAxis 
+                          yAxisId="right"
+                          orientation="right"
+                          stroke="#fbbf24" 
+                          fontSize={8}
+                          domain={[0, 360]}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Line 
+                          yAxisId="left"
+                          type="monotone" 
+                          dataKey="speed" 
+                          stroke="#22d3ee" 
+                          strokeWidth={2}
+                          dot={false}
+                          activeDot={{ r: 4 }}
+                          name="speed"
+                        />
+                        <Line 
+                          yAxisId="right"
+                          type="monotone" 
+                          dataKey="heading" 
+                          stroke="#fbbf24" 
+                          strokeWidth={1.5}
+                          dot={false}
+                          activeDot={{ r: 4 }}
+                          name="heading"
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <p className="text-[9px] text-cream-medium/30 text-center font-mono italic">Gráfico en tiempo real sincronizado</p>
+                </div>
+              )}
             </div>
           )}
         </article>
