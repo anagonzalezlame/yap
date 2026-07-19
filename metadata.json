@@ -1,0 +1,6 @@
+{
+  "name": "Maritime Dashboard",
+  "description": "A sophisticated maritime dashboard web prototype visualizing ship transits in Montevideo Bay within a 200m window detection zone, complete with interactive Leaflet maps, live simulated telemetry, and a WebSocket integration blueprint.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

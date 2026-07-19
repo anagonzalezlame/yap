@@ -1,0 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@theme {
+  --color-ocean-dark: #0f172a;
+  --color-ocean-deep: #1e293b;
+  --color-ocean-medium: #334155;
+  --color-ocean-light: #475569;
+  --color-cream-soft: #f8fafc;
+  --color-cream-medium: #cbd5e1;
+  --color-sand-warm: #e2e8f0;
+  --color-terracotta: #c2410c;
+  --color-marine-green: #22c55e;
+  
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Custom leaflet style overrides to fit the illustrative theme */
+.leaflet-container {
+  background: #0f172a !important;
+  font-family: var(--font-sans) !important;
+}
+
+.leaflet-bar {
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+.leaflet-bar a {
+  background-color: var(--color-ocean-deep) !important;
+  color: var(--color-cream-soft) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: var(--color-ocean-medium) !important;
+  color: var(--color-sand-warm) !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: var(--color-ocean-deep) !important;
+  color: var(--color-cream-soft) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important;
+}
+
+.leaflet-popup-tip {
+  background: var(--color-ocean-deep) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Hide default attribution for clean illustrative layout */
+.leaflet-control-attribution {
+  background: rgba(15, 23, 42, 0.8) !important;
+  color: rgba(203, 213, 225, 0.4) !important;
+  font-size: 9px !important;
+}
+
+/* Pulse animation for detection area and active ships */
+@keyframes map-pulse {
+  0% {
+    transform: scale(0.98);
+    opacity: 0.15;
+  }
+  50% {
+    transform: scale(1.02);
+    opacity: 0.25;
+  }
+  100% {
+    transform: scale(0.98);
+    opacity: 0.15;
+  }
+}
+
+.detection-zone-pulse {
+  animation: map-pulse 4s ease-in-out infinite;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
