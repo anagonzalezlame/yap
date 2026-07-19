@@ -25,7 +25,7 @@ import { Ship, ShipType, RecentTransit } from '../types';
 // Coordinates
 const CENTER_LAT = -34.920630;
 const CENTER_LNG = -56.229045;
-const RADIUS_M = 200;
+const RADIUS_M = 1000;
 
 // Flag dictionary
 const FLAGS: Record<string, { icon: string; name: string }> = {
@@ -227,6 +227,199 @@ export default function Dashboard({
     { id: 'TR5', name: 'REGINA MARIS', type: 'YATE', timeInZone: 'Hace 3h', closestDistance: 12 }
   ]);
 
+  // Real-Time AIS WebSocket states
+  const [useRealTime, setUseRealTime] = useState<boolean>(false);
+  const [apiKey, setApiKey] = useState<string>(() => {
+    return localStorage.getItem('aisstream_api_key') || (import.meta as any).env?.VITE_AISSTREAM_API_KEY || '';
+  });
+  const [wsStatus, setWsStatus] = useState<'offline' | 'connecting' | 'online' | 'error'>('offline');
+  const [wsError, setWsError] = useState<string | null>(null);
+
+  // Helper to map raw AIS ship types to our application types
+  const mapAisShipType = (typeNum: number): ShipType => {
+    if (typeNum === 30 || (typeNum >= 31 && typeNum <= 35) || typeNum === 55) return 'PESQUERO';
+    if (typeNum === 36 || typeNum === 37) return 'YATE';
+    if (typeNum >= 80 && typeNum <= 89) return 'TANKER';
+    return 'CARGO';
+  };
+
+  useEffect(() => {
+    if (!useRealTime || !apiKey) {
+      setWsStatus('offline');
+      return;
+    }
+
+    setWsStatus('connecting');
+    setWsError(null);
+
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: any = null;
+    let active = true;
+
+    const connect = () => {
+      try {
+        ws = new WebSocket("wss://stream.aisstream.io/ws");
+
+        ws.onopen = () => {
+          if (!active) return;
+          setWsStatus('online');
+          
+          // Bounding box for 1 km around CENTER_LAT, CENTER_LNG
+          const deltaLat = 1000 / 111000;
+          const deltaLng = 1000 / (111000 * Math.cos(CENTER_LAT * Math.PI / 180));
+          
+          const subscriptionMessage = {
+            APIKey: apiKey,
+            BoundingBoxes: [[
+              [CENTER_LAT - deltaLat * 1.5, CENTER_LNG - deltaLng * 1.5],
+              [CENTER_LAT + deltaLat * 1.5, CENTER_LNG + deltaLng * 1.5]
+            ]],
+            FiltersShipDecoders: [1, 2, 3, 5, 18, 19, 21]
+          };
+          
+          ws.send(JSON.stringify(subscriptionMessage));
+        };
+
+        ws.onmessage = (event) => {
+          if (!active) return;
+          try {
+            const aisMessage = JSON.parse(event.data);
+            const metaData = aisMessage.MetaData;
+            if (!metaData) return;
+
+            const mmsiStr = String(metaData.MMSI);
+            const { Latitude, Longitude, ShipName, ShipType: rawShipType } = metaData;
+            
+            const distance = getHaversineDistance(CENTER_LAT, CENTER_LNG, Latitude, Longitude);
+            const isInside = distance <= RADIUS_M;
+            const mappedType = mapAisShipType(rawShipType || 70);
+            
+            let speed = 5.0;
+            let heading = 0;
+            const posReport = aisMessage.Message?.PositionReport;
+            if (posReport) {
+              speed = posReport.Sog || 5.0;
+              heading = posReport.Cog || 0;
+            }
+
+            setShips(prevShips => {
+              const existingIndex = prevShips.findIndex(s => s.mmsi === mmsiStr);
+              const nextCoords: [number, number] = [Latitude, Longitude];
+              
+              let updatedShips = [...prevShips];
+              
+              if (existingIndex >= 0) {
+                const oldShip = prevShips[existingIndex];
+                const nextTrail = [...oldShip.trail, nextCoords].slice(-8);
+                
+                if (!oldShip.insideZone && isInside) {
+                  setTotalToday(t => t + 1);
+                  setRecentTransits(prevList => {
+                    const newList: RecentTransit[] = [
+                      {
+                        id: 'TR_' + Date.now() + '_' + oldShip.id + '_' + Math.random().toString(36).substring(2, 7),
+                        name: oldShip.name,
+                        type: oldShip.type,
+                        timeInZone: 'Hace 0s',
+                        closestDistance: Math.round(distance)
+                      },
+                      ...prevList
+                    ];
+                    return newList.slice(0, 5);
+                  });
+                }
+
+                updatedShips[existingIndex] = {
+                  ...oldShip,
+                  coordinates: nextCoords,
+                  trail: nextTrail,
+                  speed: speed || oldShip.speed,
+                  heading: heading || oldShip.heading,
+                  insideZone: isInside,
+                  closestDistance: distance,
+                  lastPosTime: 'hace unos instantes'
+                };
+              } else {
+                const newShipId = 'LIVE_' + mmsiStr;
+                
+                if (isInside) {
+                  setTotalToday(t => t + 1);
+                  setRecentTransits(prevList => {
+                    const newList: RecentTransit[] = [
+                      {
+                        id: 'TR_' + Date.now() + '_' + newShipId + '_' + Math.random().toString(36).substring(2, 7),
+                        name: ShipName?.trim() || `MMSI ${mmsiStr}`,
+                        type: mappedType,
+                        timeInZone: 'Hace 0s',
+                        closestDistance: Math.round(distance)
+                      },
+                      ...prevList
+                    ];
+                    return newList.slice(0, 5);
+                  });
+                }
+
+                const newShip: Ship = {
+                  id: newShipId,
+                  name: ShipName?.trim() || `MMSI ${mmsiStr}`,
+                  type: mappedType,
+                  flag: 'Internacional',
+                  flagCode: 'UN',
+                  mmsi: mmsiStr,
+                  speed: speed,
+                  heading: heading,
+                  lastPosTime: 'hace unos instantes',
+                  nextPort: 'Montevideo, UY',
+                  coordinates: nextCoords,
+                  trail: [[Latitude - 0.001, Longitude - 0.001], nextCoords],
+                  imageUrl: mappedType === 'PESQUERO' ? '🐠' : mappedType === 'YATE' ? '⛵' : '🚢',
+                  insideZone: isInside,
+                  length: 120,
+                  width: 18,
+                  draft: 5.0,
+                  callSign: 'LIVE' + mmsiStr.substring(0, 4),
+                  closestDistance: distance
+                };
+                
+                updatedShips.push(newShip);
+              }
+              
+              return updatedShips;
+            });
+            
+          } catch (e) {
+            console.error("Error parsing AISStream message:", e);
+          }
+        };
+
+        ws.onerror = (err) => {
+          if (!active) return;
+          console.error("AISStream WebSocket error:", err);
+          setWsStatus('error');
+          setWsError("Error de conexión. Verifique su API Key.");
+        };
+
+        ws.onclose = () => {
+          if (!active) return;
+          setWsStatus('connecting');
+          reconnectTimeout = setTimeout(connect, 5000);
+        };
+      } catch (err: any) {
+        if (!active) return;
+        setWsStatus('error');
+        setWsError(err.message || "Error al conectar.");
+      }
+    };
+
+    connect();
+
+    return () => {
+      active = false;
+      if (ws) ws.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
+  }, [useRealTime, apiKey]);
+
   // Haversine formula
   const getHaversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371e3; // Earth's radius in meters
@@ -251,7 +444,7 @@ export default function Dashboard({
     const map = L.map(mapContainerRef.current, {
       zoomControl: true,
       attributionControl: true
-    }).setView([CENTER_LAT, CENTER_LNG], 16);
+    }).setView([CENTER_LAT, CENTER_LNG], 15);
 
     mapRef.current = map;
 
@@ -267,7 +460,7 @@ export default function Dashboard({
       img.style.filter = 'invert(100%) hue-rotate(180deg) brightness(50%) contrast(140%) saturate(60%)';
     });
 
-    // Add 200m zone circle
+    // Add 1 km zone circle
     const zoneCircle = L.circle([CENTER_LAT, CENTER_LNG], {
       radius: RADIUS_M,
       color: '#e2e8f0',
@@ -302,7 +495,7 @@ export default function Dashboard({
           <strong class="text-sand-warm block uppercase tracking-wider font-display text-sm">Mi Ventana Receptor</strong>
           <span class="opacity-60">Lat: ${CENTER_LAT.toFixed(6)}</span><br/>
           <span class="opacity-60">Lng: ${CENTER_LNG.toFixed(6)}</span><br/>
-          <span class="text-terracotta font-bold">ZONA ACTIVA: 200m</span>
+          <span class="text-terracotta font-bold">ZONA ACTIVA: 1 km</span>
         </div>
       `);
 
@@ -433,6 +626,10 @@ export default function Dashboard({
     const timer = setInterval(() => {
       setShips(prevShips => {
         return prevShips.map(ship => {
+          if (ship.id.startsWith('LIVE_')) {
+            return ship;
+          }
+
           // Increment movement based on speed
           const speedStep = ship.speed * 0.000001; 
           const rad = (ship.heading * Math.PI) / 180;
@@ -459,10 +656,10 @@ export default function Dashboard({
           const distance = getHaversineDistance(CENTER_LAT, CENTER_LNG, nextLat, nextLng);
           const isInside = distance <= RADIUS_M;
 
-          // If the ship travels too far out (>900m), loop it back on the opposite boundary
-          if (distance > 900) {
-            const resetLat = CENTER_LAT - (deltaLat * 300);
-            const resetLng = CENTER_LNG - (deltaLng * 300);
+          // If the ship travels too far out (>4500m), loop it back on the opposite boundary
+          if (distance > 4500) {
+            const resetLat = CENTER_LAT - (deltaLat * 2200);
+            const resetLng = CENTER_LNG - (deltaLng * 2200);
             return {
               ...ship,
               coordinates: [resetLat, resetLng],
@@ -474,17 +671,17 @@ export default function Dashboard({
               speed: nextSpeed,
               heading: nextHeading,
               insideZone: false,
-              closestDistance: 900
+              closestDistance: 4500
             };
           }
 
-          // Trigger alerting if vessel enters 200m zone
+          // Trigger alerting if vessel enters 1 km zone
           if (!ship.insideZone && isInside) {
             setTotalToday(t => t + 1);
             setRecentTransits(prevList => {
               const newList: RecentTransit[] = [
                 {
-                  id: 'TR_' + Date.now(),
+                  id: 'TR_' + Date.now() + '_' + ship.id + '_' + Math.random().toString(36).substring(2, 7),
                   name: ship.name,
                   type: ship.type,
                   timeInZone: 'Hace 0s',
@@ -571,6 +768,89 @@ export default function Dashboard({
       {/* LEFT COLUMN: Panels (4 Columns) */}
       <section className="lg:col-span-4 flex flex-col gap-5 order-2 lg:order-1">
         
+        {/* AISStream Real-Time Control Card */}
+        <article className="bg-ocean-deep/85 border border-white/10 rounded-2xl p-5 shadow-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <div className="flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-cyan-400" />
+              <h2 className="font-display font-semibold text-xs tracking-wider uppercase text-white font-sans">Sincronización AIS Real</h2>
+            </div>
+            
+            {/* Status indicator badge */}
+            {wsStatus === 'online' ? (
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[9px] font-mono tracking-wider font-semibold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                ONLINE
+              </span>
+            ) : wsStatus === 'connecting' ? (
+              <span className="px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 text-[9px] font-mono tracking-wider font-semibold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse"></span>
+                CONECTANDO
+              </span>
+            ) : wsStatus === 'error' ? (
+              <span className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 text-[9px] font-mono tracking-wider font-semibold">
+                ERROR API
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full bg-white/5 text-cream-medium/40 text-[9px] font-mono tracking-wider">
+                SIMULADO (OFFLINE)
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-xs text-cream-medium/70 leading-relaxed font-sans">
+              Reciba telemetría real de buques en el puerto de Montevideo conectándose directamente a la API de <strong className="text-white font-semibold">aisstream.io</strong>.
+            </p>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] uppercase tracking-wider font-semibold text-cream-medium/50 font-sans">API Key de AISStream.io</label>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setApiKey(val);
+                    localStorage.setItem('aisstream_api_key', val);
+                  }}
+                  placeholder="Pegue su API Key aquí..."
+                  className="flex-1 bg-black/25 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder-cream-medium/30 focus:outline-none focus:border-cyan-400/50 font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-cream-medium/60 font-medium font-sans">Modo Tiempo Real (Live AIS)</span>
+              <button
+                onClick={() => {
+                  if (!apiKey && !useRealTime) {
+                    setWsStatus('error');
+                    setWsError('Por favor ingrese su API Key primero.');
+                    return;
+                  }
+                  setUseRealTime(!useRealTime);
+                }}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none cursor-pointer ${
+                  useRealTime ? 'bg-cyan-500' : 'bg-white/10 border border-white/15'
+                }`}
+              >
+                <span
+                  className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                    useRealTime ? 'translate-x-5' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {wsError && (
+              <div className="text-[10px] text-rose-400 bg-rose-500/5 border border-rose-500/10 rounded-xl p-2 font-mono leading-normal">
+                {wsError}
+              </div>
+            )}
+          </div>
+        </article>
+
         {/* Vessel Detail (SHIP DETAIL CARD) */}
         <article className="bg-ocean-deep/85 border border-white/10 rounded-2xl p-5 shadow-xl relative overflow-hidden min-h-[260px] flex flex-col justify-between">
           <div className="absolute top-0 right-0 w-24 h-full bg-[radial-gradient(circle_at_right_top,rgba(226,232,240,0.05),transparent_70%)] pointer-events-none"></div>
@@ -578,12 +858,12 @@ export default function Dashboard({
           <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
             <div className="flex items-center gap-2">
               <Info className="w-4 h-4 text-sand-warm" />
-              <h2 className="font-display font-semibold text-xs tracking-wider uppercase text-white">Detalle del Buque</h2>
+              <h2 className="font-display font-semibold text-xs tracking-wider uppercase text-white font-sans">Detalle del Buque</h2>
             </div>
             {activeSelectedShip ? (
               activeSelectedShip.insideZone ? (
                 <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-mono tracking-wider font-semibold animate-pulse">
-                  EN RANGO (200M)
+                  EN RANGO (1 KM)
                 </span>
               ) : (
                 <span className="px-2 py-0.5 rounded-full bg-white/5 text-cream-medium/60 text-[10px] font-mono tracking-wider font-semibold">
@@ -787,14 +1067,14 @@ export default function Dashboard({
                   </linearGradient>
                 </defs>
                 <line x1="0" y1="20" x2="300" y2="20" stroke="rgba(255,255,255,0.02)" strokeDasharray="3,3" />
-                <line x1="0" y1="40" x2="300" y2="40" stroke="rgba(255,255,255,0.02)" stroke-dasharray="3,3" />
-                <line x1="0" y1="60" x2="300" y2="60" stroke="rgba(255,255,255,0.02)" stroke-dasharray="3,3" />
+                <line x1="0" y1="40" x2="300" y2="40" stroke="rgba(255,255,255,0.02)" strokeDasharray="3,3" />
+                <line x1="0" y1="60" x2="300" y2="60" stroke="rgba(255,255,255,0.02)" strokeDasharray="3,3" />
                 
-                <line x1="50" y1="0" x2="50" y2="80" stroke="rgba(255,255,255,0.02)" stroke-dasharray="3,3" />
-                <line x1="100" y1="0" x2="100" y2="80" stroke="rgba(255,255,255,0.02)" stroke-dasharray="3,3" />
-                <line x1="150" y1="0" x2="150" y2="80" stroke="rgba(255,255,255,0.02)" stroke-dasharray="3,3" />
-                <line x1="200" y1="0" x2="200" y2="80" stroke="rgba(255,255,255,0.02)" stroke-dasharray="3,3" />
-                <line x1="250" y1="0" x2="250" y2="80" stroke="rgba(255,255,255,0.02)" stroke-dasharray="3,3" />
+                <line x1="50" y1="0" x2="50" y2="80" stroke="rgba(255,255,255,0.02)" strokeDasharray="3,3" />
+                <line x1="100" y1="0" x2="100" y2="80" stroke="rgba(255,255,255,0.02)" strokeDasharray="3,3" />
+                <line x1="150" y1="0" x2="150" y2="80" stroke="rgba(255,255,255,0.02)" strokeDasharray="3,3" />
+                <line x1="200" y1="0" x2="200" y2="80" stroke="rgba(255,255,255,0.02)" strokeDasharray="3,3" />
+                <line x1="250" y1="0" x2="250" y2="80" stroke="rgba(255,255,255,0.02)" strokeDasharray="3,3" />
                 
                 <path d="M 0 65 L 50 45 L 100 55 L 150 25 L 200 40 L 250 15 L 300 30 L 300 80 L 0 80 Z" fill="url(#chartGrad)" />
                 <path d="M 0 65 L 50 45 L 100 55 L 150 25 L 200 40 L 250 15 L 300 30" fill="none" stroke="#e2e8f0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -839,7 +1119,7 @@ export default function Dashboard({
             <div className="text-[10px] font-display uppercase tracking-wider font-semibold text-cream-medium">Radar de la Ventana</div>
             <div className="flex items-center gap-1.5 text-[11px] font-mono text-white">
               <span className="w-2 h-2 rounded-full bg-[#e2e8f0]"></span>
-              <span>R = 200m</span>
+              <span>R = 1 km</span>
             </div>
             <div className="text-[9px] text-cream-medium/40">Montevideo, UY</div>
           </div>
