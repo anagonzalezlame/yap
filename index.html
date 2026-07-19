@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Radar de Tráfico Marítimo - Bahía de Montevideo</title>
+    <title>Tráfico Bahía Montevideo - En Vivo</title>
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -36,22 +36,21 @@
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       }
       
-      /* Leaflet custom map containers */
+      /* Leaflet map custom background */
       .leaflet-container {
         background-color: #0b0f19 !important;
       }
       
-      /* Hide scrollbar for Chrome, Safari and Opera */
+      /* Hide scrollbars */
       .no-scrollbar::-webkit-scrollbar {
         display: none;
       }
-      /* Hide scrollbar for IE, Edge and Firefox */
       .no-scrollbar {
-        -ms-overflow-style: none;  /* IE and Edge */
-        scrollbar-width: none;  /* Firefox */
+        -ms-overflow-style: none;
+        scrollbar-width: none;
       }
       
-      /* Glowing animations */
+      /* Scanning radar wave effect */
       @keyframes radar-pulse {
         0% {
           transform: scale(0.2);
@@ -71,142 +70,173 @@
         animation: radar-pulse 3s infinite linear;
       }
       
-      /* Custom marker styles */
+      /* Marker cleanup */
       .custom-center-marker, .custom-ship-marker {
         background: none !important;
         border: none !important;
+      }
+      
+      /* Glassmorphism utility */
+      .glass-panel {
+        background: rgba(8, 12, 24, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 20px 45px -15px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(12px);
       }
     </style>
   </head>
   <body class="h-full overflow-hidden font-sans text-slate-100 antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
 
-    <!-- Main App Container -->
-    <div class="relative flex h-full w-full flex-col md:flex-row overflow-hidden">
-      
-      <!-- Leaflet Interactive Map -->
-      <div id="map" class="absolute inset-0 z-0 h-full w-full"></div>
-      
-      <!-- Overlay: Top Header Grid -->
-      <div class="pointer-events-none absolute left-0 right-0 top-0 z-10 flex flex-col gap-4 p-4 md:flex-row md:items-start md:justify-between">
-        
-        <!-- Header Panel (Glassmorphism) -->
-        <div class="pointer-events-auto flex flex-col gap-2 rounded-xl border border-slate-800/80 bg-slate-950/85 p-4 shadow-2xl backdrop-blur-md md:w-96">
-          <div class="flex items-center gap-3">
-            <div class="relative flex h-3 w-3">
-              <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-              <span class="relative inline-flex h-3 w-3 rounded-full bg-emerald-500"></span>
-            </div>
-            <h1 class="font-display text-lg font-bold tracking-tight text-white">
-              Montevideo Bay Radar
-            </h1>
-          </div>
-          <p class="text-xs text-slate-400 leading-normal">
-            Visualización de tráfico marítimo en tiempo real en un radio de <span class="font-mono text-emerald-400 font-semibold">200 metros</span> desde la ventana de observación.
-          </p>
-          <div class="mt-1 flex items-center justify-between border-t border-slate-800/60 pt-2 text-[10px] font-mono text-slate-500">
-            <span>COORDS: -34.920630, -56.229045</span>
-            <span class="text-slate-400 font-semibold">Bahía MVD</span>
-          </div>
-        </div>
-        
-        <!-- Live Alert Status / Indicator (Middle) -->
-        <div id="alert-banner" class="pointer-events-auto hidden animate-bounce items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-950/90 px-3 py-1.5 shadow-xl backdrop-blur">
-          <span class="flex h-2 w-2 rounded-full bg-cyan-400 animate-pulse"></span>
-          <span class="font-mono text-[10px] font-medium uppercase tracking-wider text-cyan-200" id="alert-text">
-            ¡Barco detectado dentro del rango!
-          </span>
-        </div>
-      </div>
+    <!-- Main Map Background -->
+    <div id="map" class="absolute inset-0 z-0 h-full w-full"></div>
 
-      <!-- Left Side Info: Logs & Connection Center -->
-      <div class="pointer-events-none absolute bottom-4 left-4 z-10 flex flex-col gap-3 md:w-96 w-[calc(100%-2rem)]">
+    <!-- MAIN DASHBOARD CONTENT GRID (Pointer events none so map works beneath overlays) -->
+    <div class="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between p-4 md:flex-row md:items-start md:gap-4 overflow-hidden">
+      
+      <!-- LEFT COLUMN: HEADER AND CONTROL CENTERS -->
+      <div class="flex flex-col gap-4 w-full md:w-96 max-h-full">
         
-        <!-- Connection Controller (Glassmorphism) -->
-        <div class="pointer-events-auto flex flex-col gap-3 rounded-xl border border-slate-800/80 bg-slate-950/85 p-4 shadow-2xl backdrop-blur-md">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Canal de Datos</span>
+        <!-- HEADER PANEL (Collapsible) -->
+        <div id="header-panel" class="pointer-events-auto glass-panel flex flex-col rounded-xl overflow-hidden transition-all duration-300">
+          <!-- Title / Header Row -->
+          <div class="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] bg-slate-950/40">
+            <div class="flex items-center gap-2.5">
+              <div class="relative flex h-3.5 w-3.5">
+                <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                <span class="relative inline-flex h-3.5 w-3.5 rounded-full bg-emerald-500"></span>
+              </div>
+              <h1 class="font-display text-sm font-bold tracking-tight text-white uppercase">
+                Tráfico Bahía Montevideo
+              </h1>
+            </div>
+            <!-- Minimize/Maximize Button -->
+            <button id="btn-toggle-header" class="flex h-6 w-6 items-center justify-center rounded bg-white/[0.04] text-slate-400 hover:text-white hover:bg-white/[0.1] transition-all-300">
+              <span id="header-toggle-icon" class="font-mono text-xs font-bold">-</span>
+            </button>
+          </div>
+          
+          <!-- Collapsible Content Body -->
+          <div id="header-content" class="flex flex-col gap-3 p-4 transition-all duration-300">
+            <p class="text-xs text-slate-400 leading-normal">
+              Visualización y monitoreo de embarcaciones marítimas que transitan estrictamente a menos de <span class="font-mono text-emerald-400 font-semibold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">200 metros</span> de la ventana de observación.
+            </p>
+            <div class="flex flex-col gap-1.5 border-t border-white/[0.06] pt-3 text-[11px] font-mono text-slate-400">
+              <div class="flex justify-between">
+                <span>COORDENADAS</span>
+                <span class="text-white font-medium">-34.920630, -56.229045</span>
+              </div>
+              <div class="flex justify-between">
+                <span>ZOOM RADAR</span>
+                <span class="text-emerald-400 font-medium">RADIO 200M</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CONTROL & TERMINAL CENTER -->
+        <div class="pointer-events-auto glass-panel flex flex-col rounded-xl overflow-hidden">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] bg-slate-950/40">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-display">Canal de Datos</span>
             <div id="status-badge" class="flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-0.5 border border-amber-500/20 text-[10px] font-mono font-medium text-amber-400">
-              <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
+              <span class="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse"></span>
               <span id="status-text">Desconectado</span>
             </div>
           </div>
           
-          <!-- Mode Selectors -->
-          <div class="grid grid-cols-2 gap-2 text-xs">
-            <button id="btn-connect-ws" class="flex items-center justify-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-2 font-medium text-white shadow-lg transition-all-300 hover:bg-cyan-500 active:scale-95 disabled:opacity-50">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-3.5 w-3.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
-              </svg>
-              Conectar API
-            </button>
-            <button id="btn-simulation" class="flex items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-medium text-slate-300 transition-all-300 hover:bg-slate-800 hover:text-white active:scale-95">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-3.5 w-3.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
-              </svg>
-              Simulación
-            </button>
-          </div>
-
-          <!-- Log console terminal style -->
-          <div class="flex flex-col rounded-lg border border-slate-800 bg-slate-950 p-2.5">
-            <div class="mb-1 flex items-center justify-between text-[9px] font-mono uppercase text-slate-500">
-              <span>Terminal de Eventos</span>
-              <button id="btn-clear-logs" class="hover:text-slate-300">Limpiar</button>
+          <div class="p-4 flex flex-col gap-3">
+            <!-- Mode Switchers -->
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <button id="btn-connect-ws" class="flex items-center justify-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-2 font-semibold text-white shadow-lg transition-all-300 hover:bg-cyan-500 active:scale-95 disabled:opacity-50">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="h-3.5 w-3.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                </svg>
+                Conectar API
+              </button>
+              <button id="btn-simulation" class="flex items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-semibold text-slate-300 transition-all-300 hover:bg-slate-800 hover:text-white active:scale-95">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-3.5 w-3.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
+                </svg>
+                Simular
+              </button>
             </div>
-            <div id="log-console" class="no-scrollbar h-20 overflow-y-auto font-mono text-[9px] text-slate-400 space-y-1">
-              <div class="text-slate-500">> Sistema inicializado. Listo para conectar.</div>
+
+            <!-- Terminal output window -->
+            <div class="flex flex-col rounded-lg border border-slate-800 bg-slate-950 p-2.5">
+              <div class="mb-1.5 flex items-center justify-between text-[10px] font-mono uppercase text-slate-500">
+                <span>Consola del Receptor</span>
+                <button id="btn-clear-logs" class="hover:text-slate-300 transition-colors">Limpiar</button>
+              </div>
+              <div id="log-console" class="no-scrollbar h-24 overflow-y-auto font-mono text-[10px] text-slate-400 space-y-1">
+                <div class="text-slate-500">> Receptor listo. Haga clic en Conectar o Simular para iniciar.</div>
+              </div>
             </div>
           </div>
         </div>
+
       </div>
 
-      <!-- Right Side Panel: Live Ship List & Details -->
-      <div class="pointer-events-none absolute bottom-4 right-4 top-4 z-10 flex flex-col gap-4 md:w-96 w-[calc(100%-2rem)] max-h-[calc(100%-2rem)]">
+      <!-- CENTER: Live banner alert showing if ships detected -->
+      <div id="alert-banner" class="pointer-events-auto hidden animate-bounce self-center items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-950/90 px-3.5 py-2 shadow-2xl backdrop-blur">
+        <span class="flex h-2.5 w-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+        <span class="font-mono text-xs font-semibold uppercase tracking-wider text-cyan-200">
+          ¡Detección activa en rango de 200m!
+        </span>
+      </div>
+
+      <!-- RIGHT COLUMN: SIDEBAR LIST & DETAIL CARD -->
+      <div class="flex flex-col gap-4 w-full md:w-96 max-h-full">
         
-        <!-- Live vessels panel (Glassmorphism) -->
-        <div class="pointer-events-auto flex flex-1 flex-col rounded-xl border border-slate-800/80 bg-slate-950/85 p-4 shadow-2xl backdrop-blur-md overflow-hidden">
+        <!-- SIDEBAR PANEL ("Lista de Buques en Zona") (Collapsible) -->
+        <div id="sidebar-panel" class="pointer-events-auto glass-panel flex flex-1 flex-col rounded-xl overflow-hidden transition-all duration-300">
           
-          <!-- Title & Stats -->
-          <div class="mb-3 flex items-center justify-between border-b border-slate-800/80 pb-3">
-            <div class="flex flex-col">
+          <!-- Header title bar -->
+          <div class="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] bg-slate-950/40">
+            <div class="flex items-center gap-2">
               <h2 class="font-display text-sm font-bold tracking-wide text-white uppercase">
-                Embarcaciones en Rango
+                Lista de Buques en Zona
               </h2>
-              <span class="text-[10px] text-slate-400">Radio de 200m del observatorio</span>
+              <div class="flex items-center justify-center rounded-md bg-emerald-500/15 px-2 py-0.5 border border-emerald-500/20">
+                <span class="text-[11px] font-mono font-bold text-emerald-400" id="ship-count">0</span>
+              </div>
             </div>
-            <div class="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-2 py-1 border border-emerald-500/20">
-              <span class="text-xs font-mono font-bold text-emerald-400" id="ship-count">0</span>
-              <span class="text-[9px] font-mono text-slate-400 uppercase">Activos</span>
+            <!-- Minimize/Maximize Button -->
+            <button id="btn-toggle-sidebar" class="flex h-6 w-6 items-center justify-center rounded bg-white/[0.04] text-slate-400 hover:text-white hover:bg-white/[0.1] transition-all-300">
+              <span id="sidebar-toggle-icon" class="font-mono text-xs font-bold">-</span>
+            </button>
+          </div>
+
+          <!-- Collapsible List Body -->
+          <div id="sidebar-content" class="flex flex-1 flex-col p-4 overflow-hidden transition-all duration-300">
+            <!-- Vessel list container -->
+            <div id="ship-list-container" class="no-scrollbar flex-1 overflow-y-auto space-y-2">
+              <!-- No Ships Placeholder -->
+              <div id="no-ships-placeholder" class="flex h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-800 p-4 text-center">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-8 w-8 text-slate-600">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.637 10.637z" />
+                </svg>
+                <div class="text-xs font-medium text-slate-400">Canal Despejado</div>
+                <p class="text-[10px] text-slate-500 max-w-xs">No se detectan buques dentro del radio de 200 metros.</p>
+              </div>
             </div>
           </div>
 
-          <!-- Vessel list container -->
-          <div id="ship-list-container" class="no-scrollbar flex-1 overflow-y-auto space-y-2">
-            <!-- No Ships Placeholder -->
-            <div id="no-ships-placeholder" class="flex h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-800 p-4 text-center">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-8 w-8 text-slate-600">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.637 10.637z" />
-              </svg>
-              <div class="text-xs font-medium text-slate-400">Área Despejada</div>
-              <p class="text-[10px] text-slate-500 max-w-xs">No se detectan buques dentro del radio de 200 metros en este momento.</p>
-            </div>
-          </div>
         </div>
 
-        <!-- Detail Panel (Only visible when ship is clicked) -->
-        <div id="detail-panel" class="pointer-events-auto hidden flex-col gap-2.5 rounded-xl border border-cyan-500/30 bg-slate-950/95 p-4 shadow-2xl backdrop-blur-md transition-all-300">
-          <div class="flex items-center justify-between border-b border-slate-800/80 pb-2">
-            <div class="flex items-center gap-1.5">
-              <div class="h-2 w-2 rounded-full bg-cyan-400"></div>
-              <h3 class="font-display text-xs font-bold uppercase tracking-wider text-cyan-400" id="detail-name">Buque</h3>
+        <!-- SHIP DETAIL CARD (Populates when ship is clicked) -->
+        <div id="detail-panel" class="pointer-events-auto hidden flex-col gap-3 rounded-xl border border-cyan-500/30 bg-slate-950/95 p-4 shadow-2xl backdrop-blur-md transition-all-300">
+          <div class="flex items-center justify-between border-b border-white/[0.06] pb-2">
+            <div class="flex items-center gap-2">
+              <img id="detail-flag" src="" class="h-3 w-5 object-cover rounded shadow" alt="flag" referrerPolicy="no-referrer" />
+              <h3 class="font-display text-xs font-bold uppercase tracking-wider text-cyan-400" id="detail-name">BUQUE</h3>
             </div>
             <button id="btn-close-detail" class="text-slate-400 hover:text-white">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-3.5 w-3.5">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="h-3.5 w-3.5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-          <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs font-mono">
+          
+          <div class="grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs font-mono">
             <div>
               <span class="block text-[9px] uppercase text-slate-500">MMSI</span>
               <span class="text-slate-200 font-semibold" id="detail-mmsi">000000000</span>
@@ -216,55 +246,59 @@
               <span class="text-slate-200 font-semibold" id="detail-speed">0.0 nudos</span>
             </div>
             <div>
-              <span class="block text-[9px] uppercase text-slate-500">Distancia</span>
+              <span class="block text-[9px] uppercase text-slate-500">Distancia al Observador</span>
               <span class="text-emerald-400 font-bold" id="detail-distance">0 m</span>
             </div>
             <div>
-              <span class="block text-[9px] uppercase text-slate-500">Dirección (COG)</span>
-              <span class="text-slate-200 font-semibold" id="detail-cog">0°</span>
+              <span class="block text-[9px] uppercase text-slate-500">País / Bandera</span>
+              <span class="text-slate-200 font-semibold" id="detail-country">N/A</span>
             </div>
             <div class="col-span-2">
-              <span class="block text-[9px] uppercase text-slate-500">Coordenadas</span>
+              <span class="block text-[9px] uppercase text-slate-500">Posición Exacta</span>
               <span class="text-slate-300 text-[11px]" id="detail-coords">-00.00000, -00.00000</span>
             </div>
           </div>
         </div>
+
       </div>
+
     </div>
 
     <!-- Leaflet & App Logic scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script>
-      // Coordinates of user's window in Montevideo Bay
+      // Coordinates of observatory point (Montevideo Bay)
       const CENTER_LAT = -34.920630;
       const CENTER_LNG = -56.229045;
       const SCAN_RADIUS_METERS = 200;
 
-      // Leaflet Map Initialization
+      // Leaflet Map Initialization centered closely on coordinates
       const map = L.map('map', {
         zoomControl: false,
         attributionControl: false
       }).setView([CENTER_LAT, CENTER_LNG], 17);
 
-      // CartoDB Dark Matter tile layer for premium dark style
+      // CartoDB Dark Matter tile layer
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         maxZoom: 20
       }).addTo(map);
 
-      // Add simple zoom control in a top-right position
+      // Add zoom buttons top right
       L.control.zoom({
         position: 'topright'
       }).addTo(map);
 
-      // Home/Center Beacon Marker
-      const centerIcon = L.divIcon({
+      // Fixed Marker Representing 'My Window' (Observatory Point)
+      const windowIcon = L.divIcon({
         className: 'custom-center-marker',
         html: `
           <div class="relative flex items-center justify-center">
             <div class="absolute w-12 h-12 bg-emerald-500/20 rounded-full radar-wave"></div>
             <div class="absolute w-6 h-6 bg-emerald-500/30 rounded-full animate-ping"></div>
-            <div class="relative w-4.5 h-4.5 bg-emerald-500 border border-white rounded-full shadow-lg flex items-center justify-center">
-              <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
+            <div class="relative w-7 h-7 bg-slate-950 border-2 border-emerald-500 rounded-full shadow-2xl flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 text-emerald-400">
+                <path d="M19 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 9h-4V5h4v6zm-6-6v6H7V5h4zm-4 8h4v6H7v-6zm6 6v-6h4v6h-4z"/>
+              </svg>
             </div>
           </div>
         `,
@@ -272,33 +306,134 @@
         iconAnchor: [24, 24]
       });
 
-      const centerMarker = L.marker([CENTER_LAT, CENTER_LNG], { icon: centerIcon })
+      const myWindowMarker = L.marker([CENTER_LAT, CENTER_LNG], { icon: windowIcon })
         .addTo(map)
-        .bindTooltip("<b>Observatorio Ventana</b><br>Montevideo", {
+        .bindTooltip("<b>Mi Ventana (Observatorio)</b><br>Montevideo Bay", {
           permanent: false,
           direction: 'top',
-          className: 'bg-slate-950 text-slate-100 border border-slate-800 rounded font-sans text-xs px-2 py-1 shadow-xl'
+          className: 'bg-slate-950 text-slate-100 border border-slate-800 rounded font-sans text-xs px-2.5 py-1 shadow-2xl'
         });
 
-      // Subtle 200-meter range circle around center
-      const zoneCircle = L.circle([CENTER_LAT, CENTER_LNG], {
+      // Subtle 200-meter range circle
+      const scanCircle = L.circle([CENTER_LAT, CENTER_LNG], {
         radius: SCAN_RADIUS_METERS,
         color: '#10b981', // emerald-500
         fillColor: '#10b981',
-        fillOpacity: 0.08,
+        fillOpacity: 0.07,
         weight: 1.5,
-        dashArray: '4, 4'
+        dashArray: '4, 6'
       }).addTo(map);
+
+      // Maritime Identification Digits (MID) mapped to ISO 3166-1 country names and codes
+      const MID_CODES = {
+        '770': { code: 'uy', name: 'Uruguay' },
+        '351': { code: 'pa', name: 'Panamá' },
+        '352': { code: 'pa', name: 'Panamá' },
+        '353': { code: 'pa', name: 'Panamá' },
+        '354': { code: 'pa', name: 'Panamá' },
+        '355': { code: 'pa', name: 'Panamá' },
+        '356': { code: 'pa', name: 'Panamá' },
+        '357': { code: 'pa', name: 'Panamá' },
+        '370': { code: 'pa', name: 'Panamá' },
+        '371': { code: 'pa', name: 'Panamá' },
+        '372': { code: 'pa', name: 'Panamá' },
+        '373': { code: 'pa', name: 'Panamá' },
+        '374': { code: 'pa', name: 'Panamá' },
+        '311': { code: 'bs', name: 'Bahamas' },
+        '538': { code: 'mh', name: 'Islas Marshall' },
+        '636': { code: 'lr', name: 'Liberia' },
+        '563': { code: 'sg', name: 'Singapur' },
+        '564': { code: 'sg', name: 'Singapur' },
+        '565': { code: 'sg', name: 'Singapur' },
+        '566': { code: 'sg', name: 'Singapur' },
+        '477': { code: 'hk', name: 'Hong Kong' },
+        '256': { code: 'mt', name: 'Malta' },
+        '215': { code: 'gr', name: 'Grecia' },
+        '210': { code: 'cy', name: 'Chipre' },
+        '244': { code: 'nl', name: 'Países Bajos' },
+        '224': { code: 'es', name: 'España' },
+        '228': { code: 'fr', name: 'Francia' },
+        '211': { code: 'de', name: 'Alemania' },
+        '247': { code: 'it', name: 'Italia' },
+        '273': { code: 'ru', name: 'Rusia' },
+        '232': { code: 'gb', name: 'Reino Unido' },
+        '233': { code: 'gb', name: 'Reino Unido' },
+        '234': { code: 'gb', name: 'Reino Unido' },
+        '235': { code: 'gb', name: 'Reino Unido' },
+        '366': { code: 'us', name: 'Estados Unidos' },
+        '367': { code: 'us', name: 'Estados Unidos' },
+        '368': { code: 'us', name: 'Estados Unidos' },
+        '369': { code: 'us', name: 'Estados Unidos' },
+        '701': { code: 'ar', name: 'Argentina' },
+        '710': { code: 'br', name: 'Brasil' },
+        '725': { code: 'cl', name: 'Chile' },
+        '740': { code: 'co', name: 'Colombia' },
+        '760': { code: 'pe', name: 'Perú' },
+        '412': { code: 'cn', name: 'China' },
+        '413': { code: 'cn', name: 'China' },
+        '414': { code: 'cn', name: 'China' },
+        '419': { code: 'in', name: 'India' },
+        '431': { code: 'jp', name: 'Japón' },
+        '432': { code: 'jp', name: 'Japón' },
+        '440': { code: 'kr', name: 'Corea del Sur' },
+        '441': { code: 'kr', name: 'Corea del Sur' },
+        '503': { code: 'au', name: 'Australia' },
+        '512': { code: 'nz', name: 'Nueva Zelanda' },
+        '312': { code: 'bz', name: 'Belice' },
+        '314': { code: 'bb', name: 'Barbados' },
+        '316': { code: 'ca', name: 'Canadá' },
+        '319': { code: 'ky', name: 'Islas Caimán' },
+        '321': { code: 'cr', name: 'Costa Rica' },
+        '325': { code: 'dm', name: 'Dominica' },
+        '327': { code: 'do', name: 'República Dominicana' },
+        '334': { code: 'hn', name: 'Honduras' },
+        '336': { code: 'jm', name: 'Jamaica' },
+        '341': { code: 'kn', name: 'San Cristóbal y Nieves' },
+        '343': { code: 'lc', name: 'Santa Lucía' },
+        '345': { code: 'mx', name: 'México' },
+        '350': { code: 'ni', name: 'Nicaragua' },
+        '378': { code: 'vg', name: 'Islas Vírgenes Británicas' },
+        '361': { code: 'vc', name: 'San Vicente y las Granadinas' },
+        '375': { code: 'vc', name: 'San Vicente y las Granadinas' },
+        '376': { code: 'vc', name: 'San Vicente y las Granadinas' },
+        '377': { code: 'vc', name: 'San Vicente y las Granadinas' },
+        '457': { code: 'my', name: 'Malasia' },
+        '533': { code: 'my', name: 'Malasia' },
+        '525': { code: 'id', name: 'Indonesia' },
+        '567': { code: 'th', name: 'Tailandia' },
+        '574': { code: 'vn', name: 'Vietnam' },
+        '745': { code: 'ec', name: 'Ecuador' },
+        '765': { code: 'py', name: 'Paraguay' },
+        '775': { code: 've', name: 'Venezuela' },
+        '205': { code: 'be', name: 'Bélgica' },
+        '219': { code: 'dk', name: 'Dinamarca' },
+        '220': { code: 'se', name: 'Suecia' },
+        '265': { code: 'se', name: 'Suecia' },
+        '266': { code: 'se', name: 'Suecia' },
+        '230': { code: 'fi', name: 'Finlandia' },
+        '242': { code: 'no', name: 'Noruega' },
+        '257': { code: 'pt', name: 'Portugal' },
+        '304': { code: 'ca', name: 'Canadá' }
+      };
+
+      // Resolve country registration details based on MMSI number
+      function getCountryFromMMSI(mmsi) {
+        if (!mmsi) return { code: 'un', name: 'Desconocido' };
+        const mmsiStr = String(mmsi);
+        if (mmsiStr.length < 3) return { code: 'un', name: 'Desconocido' };
+        const mid = mmsiStr.substring(0, 3);
+        return MID_CODES[mid] || { code: 'un', name: 'Registro Desconocido' };
+      }
 
       // App States
       let activeWebsocket = null;
       let activeSimulationInterval = null;
       let appMode = 'disconnected'; // 'connected' | 'disconnected' | 'simulating'
-      const shipsMap = new Map(); // MMSI -> Ship object
+      const shipsMap = new Map(); // MMSI -> Ship details object
 
-      // Haversine formula to compute geodesic distance in meters
+      // Haversine formula to compute exact distance in meters between two lat/lon coordinates
       function haversineDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371000; // Earth's radius in meters
+        const R = 6371000; // Radius of Earth in meters
         const dLat = (lat2 - lat1) * Math.PI / 180;
         const dLon = (lon2 - lon1) * Math.PI / 180;
         const a = 
@@ -309,7 +444,7 @@
         return R * c;
       }
 
-      // Logging helper
+      // Logging inside events console
       const logConsole = document.getElementById('log-console');
       function addLog(message, type = 'info') {
         const timestamp = new Date().toLocaleTimeString();
@@ -325,7 +460,7 @@
         logConsole.scrollTop = logConsole.scrollHeight;
       }
 
-      // Update Connection Status Badge
+      // Connection state visualization helper
       function setStatus(status) {
         appMode = status;
         const badge = document.getElementById('status-badge');
@@ -339,26 +474,29 @@
         } else if (status === 'simulating') {
           badge.classList.add('bg-cyan-500/10', 'border-cyan-500/20', 'text-cyan-400');
           text.textContent = 'Simulación';
-        } else {
+        } else if (status === 'connecting') {
           badge.classList.add('bg-amber-500/10', 'border-amber-500/20', 'text-amber-400');
+          text.textContent = 'Conectando';
+        } else {
+          badge.classList.add('bg-slate-500/10', 'border-slate-500/20', 'text-slate-400');
           text.textContent = 'Desconectado';
         }
       }
 
-      // Render Ship Directional HTML Anchor
+      // Generate customized direction marker arrow HTML
       function getShipMarkerHTML(cog, name, inside) {
         const rotation = cog ? `transform: rotate(${cog}deg);` : '';
         const color = inside ? 'text-cyan-400 fill-cyan-400' : 'text-slate-500 fill-slate-500';
         const ringColor = inside ? 'bg-cyan-500/20' : 'bg-slate-500/10';
         return `
           <div class="relative flex flex-col items-center justify-center">
-            <!-- Label -->
-            <div class="absolute -top-7 whitespace-nowrap bg-slate-950/90 text-[9px] text-slate-100 font-mono px-1.5 py-0.5 rounded border border-slate-800 shadow-md pointer-events-none uppercase">
+            <!-- Miniature label -->
+            <div class="absolute -top-7 whitespace-nowrap bg-slate-950/90 text-[9px] text-slate-100 font-mono px-1.5 py-0.5 rounded border border-white/10 shadow-md pointer-events-none uppercase">
               ${name || 'MMSI'}
             </div>
-            <!-- Glow Pulse -->
+            <!-- Glow pulse circle -->
             <div class="absolute w-8 h-8 ${ringColor} rounded-full animate-pulse"></div>
-            <!-- Directional Icon -->
+            <!-- Dynamic arrow pointing to COG direction -->
             <div style="${rotation}" class="relative w-4 h-5 flex items-center justify-center transition-transform duration-500">
               <svg viewBox="0 0 24 24" class="w-4 h-5 ${color} filter drop-shadow">
                 <path d="M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z" />
@@ -368,32 +506,39 @@
         `;
       }
 
-      // Custom Detail Dialog Presenter
+      // Detail card panel populate & view toggle
       function showShipDetails(ship) {
         const panel = document.getElementById('detail-panel');
+        const countryInfo = getCountryFromMMSI(ship.mmsi);
+        
         document.getElementById('detail-name').textContent = ship.name || `BUQUE / ${ship.mmsi}`;
         document.getElementById('detail-mmsi').textContent = ship.mmsi;
         document.getElementById('detail-speed').textContent = `${ship.speed.toFixed(1)} nudos`;
         document.getElementById('detail-distance').textContent = `${Math.round(ship.distance)} metros`;
-        document.getElementById('detail-cog').textContent = `${ship.cog ? Math.round(ship.cog) : 0}°`;
+        document.getElementById('detail-country').textContent = countryInfo.name;
         document.getElementById('detail-coords').textContent = `${ship.lat.toFixed(6)}, ${ship.lng.toFixed(6)}`;
         
+        // Load ISO Flag image dynamically using FlagCDN
+        const flagImg = document.getElementById('detail-flag');
+        flagImg.src = `https://flagcdn.com/w20/${countryInfo.code}.png`;
+        flagImg.onerror = () => { flagImg.src = "https://flagcdn.com/w20/un.png"; };
+
         panel.classList.remove('hidden');
         panel.classList.add('flex');
       }
 
-      // Close Details Box
+      // Close Details panel click handler
       document.getElementById('btn-close-detail').addEventListener('click', () => {
         document.getElementById('detail-panel').classList.add('hidden');
       });
 
-      // Update Live UI Cards & Banner Alerts
+      // Synchronize Live Vessel Cards list to Sidebar UI
       function renderShipsUI() {
         const container = document.getElementById('ship-list-container');
         const countBadge = document.getElementById('ship-count');
         const alertBanner = document.getElementById('alert-banner');
         
-        // Filter ships inside target radius <= 200m
+        // Filter strictly to ships within 200m zone
         const activeShips = Array.from(shipsMap.values()).filter(s => s.distance <= SCAN_RADIUS_METERS);
         
         countBadge.textContent = activeShips.length;
@@ -405,7 +550,7 @@
           alertBanner.classList.add('hidden');
         }
 
-        // Clear only non-placeholder contents
+        // Clean out previous cards, preserve placeholder when empty
         const listItems = container.querySelectorAll('.vessel-card');
         listItems.forEach(el => el.remove());
 
@@ -416,12 +561,13 @@
 
         document.getElementById('no-ships-placeholder').classList.add('hidden');
 
-        // Sort by distance (closest first)
+        // Sort by closest distance to window
         activeShips.sort((a, b) => a.distance - b.distance);
 
         activeShips.forEach(ship => {
+          const countryInfo = getCountryFromMMSI(ship.mmsi);
           const card = document.createElement('div');
-          card.className = 'vessel-card pointer-events-auto flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 p-3 hover:border-cyan-500/40 hover:bg-slate-900/90 transition-all-300 cursor-pointer';
+          card.className = 'vessel-card pointer-events-auto flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 p-3 hover:border-cyan-500/40 hover:bg-slate-900/95 transition-all-300 cursor-pointer';
           card.addEventListener('click', () => {
             map.panTo([ship.lat, ship.lng]);
             ship.marker.openPopup();
@@ -431,41 +577,40 @@
           card.innerHTML = `
             <div class="flex items-center gap-2.5">
               <div class="flex h-8 w-8 items-center justify-center rounded bg-slate-950 border border-slate-800 text-cyan-400">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-4.5 w-4.5">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 21v-8.25L12 9l3.75 3.75V21m-7.5 0h7.5" />
-                </svg>
+                <img src="https://flagcdn.com/w20/${countryInfo.code}.png" class="h-3 w-5 object-cover rounded shadow" onerror="this.src='https://flagcdn.com/w20/un.png';" alt="flag" referrerPolicy="no-referrer" />
               </div>
               <div class="flex flex-col">
                 <span class="text-xs font-bold text-white uppercase tracking-tight">${ship.name || 'MMSI ' + ship.mmsi}</span>
-                <span class="text-[9px] font-mono text-slate-500">MMSI: ${ship.mmsi}</span>
+                <span class="text-[9px] font-mono text-slate-500">MMSI: ${ship.mmsi} (${countryInfo.name})</span>
               </div>
             </div>
             <div class="flex flex-col items-end gap-0.5">
               <span class="text-xs font-bold text-emerald-400 font-mono">${Math.round(ship.distance)}m</span>
-              <span class="text-[9px] font-mono text-slate-400">${ship.speed.toFixed(1)} nudos</span>
+              <span class="text-[9px] font-mono text-slate-400">${ship.speed.toFixed(1)} kn</span>
             </div>
           `;
           container.appendChild(card);
         });
       }
 
-      // Add/Update Ship State & Map Markers
+      // Add or update active vessel state
       function processShipMessage(mmsi, name, lat, lng, speed, cog) {
         const distance = haversineDistance(lat, lng, CENTER_LAT, CENTER_LNG);
         const inside = distance <= SCAN_RADIUS_METERS;
 
-        // Clean up or remove if it has left the 200m radius
+        // Strict <= 200m filter rule
         if (!inside) {
           if (shipsMap.has(mmsi)) {
             const oldShip = shipsMap.get(mmsi);
             if (oldShip.marker) map.removeLayer(oldShip.marker);
             shipsMap.delete(mmsi);
-            addLog(`Buque [${name || mmsi}] salió del radio de 200 metros`, 'info');
+            addLog(`Buque [${name || mmsi}] abandonó el radio de 200m`, 'info');
             renderShipsUI();
           }
           return;
         }
 
+        const countryInfo = getCountryFromMMSI(mmsi);
         const customMarkerIcon = L.divIcon({
           className: 'custom-ship-marker',
           html: getShipMarkerHTML(cog, name || mmsi, inside),
@@ -473,8 +618,16 @@
           iconAnchor: [24, 24]
         });
 
+        const tooltipHTML = `
+          <div class="flex items-center gap-1.5 font-sans">
+            <img src="https://flagcdn.com/w20/${countryInfo.code}.png" class="h-2.5 w-4 object-cover rounded" onerror="this.src='https://flagcdn.com/w20/un.png';" referrerPolicy="no-referrer" />
+            <b class="text-white">${name || 'MMSI: ' + mmsi}</b>
+          </div>
+          <div class="text-[10px] font-mono text-slate-300 mt-0.5">${speed.toFixed(1)} nudos • ${Math.round(distance)}m</div>
+        `;
+
         if (shipsMap.has(mmsi)) {
-          // Update existing
+          // Update existing ship marker coordinates & properties
           const ship = shipsMap.get(mmsi);
           ship.lat = lat;
           ship.lng = lng;
@@ -485,13 +638,13 @@
           
           ship.marker.setLatLng([lat, lng]);
           ship.marker.setIcon(customMarkerIcon);
-          ship.marker.setTooltipContent(`<b>${name || 'MMSI: ' + mmsi}</b><br>${speed.toFixed(1)} nudos<br>${Math.round(distance)}m`);
+          ship.marker.setTooltipContent(tooltipHTML);
         } else {
-          // Add new
-          addLog(`¡NUEVO BUQUE EN DETECCIÓN! [${name || mmsi}] a ${Math.round(distance)}m`, 'success');
+          // New ship entering the 200m window detection range
+          addLog(`¡CONTACTO DETECTADO! [${name || mmsi}] de ${countryInfo.name} a ${Math.round(distance)}m`, 'success');
           
           const marker = L.marker([lat, lng], { icon: customMarkerIcon }).addTo(map);
-          marker.bindTooltip(`<b>${name || 'MMSI: ' + mmsi}</b><br>${speed.toFixed(1)} nudos<br>${Math.round(distance)}m`, {
+          marker.bindTooltip(tooltipHTML, {
             permanent: false,
             className: 'bg-slate-950 text-slate-100 border border-slate-800 rounded font-sans text-xs px-2 py-1 shadow-xl'
           });
@@ -515,7 +668,7 @@
         renderShipsUI();
       }
 
-      // Stop any existing connections & simulation routines
+      // Stop previous operations & clean state
       function resetObservationState() {
         if (activeWebsocket) {
           activeWebsocket.close();
@@ -526,7 +679,7 @@
           activeSimulationInterval = null;
         }
         
-        // Remove existing map markers
+        // Remove previous visual markers
         shipsMap.forEach(ship => {
           if (ship.marker) map.removeLayer(ship.marker);
         });
@@ -535,39 +688,44 @@
         document.getElementById('detail-panel').classList.add('hidden');
       }
 
-      // Connect Directly to Real-Time aisstream.io WebSockets API
+      // Connect Directly to real-time stream.aisstream.io WebSocket
       function connectDirectWebsocket() {
         resetObservationState();
         setStatus('connecting');
-        addLog("Estableciendo conexión con aisstream.io...", "warning");
+        addLog("Conectando con stream.aisstream.io...", "warning");
 
         try {
+          // Connecting directly to wss://stream.aisstream.io/v0/stream as requested
           activeWebsocket = new WebSocket("wss://stream.aisstream.io/v0/stream");
 
           activeWebsocket.onopen = () => {
-            addLog("Conexión WebSocket establecida. Enviando suscripción...", "success");
+            addLog("Conexión WebSocket establecida con éxito.", "success");
             setStatus('connected');
 
+            // EXACT SUBSCRIPTION PAYLOAD FORMAT REQUESTED
             const payload = {
               "APIKey": "eb8c73d7cfad425458c057a722132a0c516b7ef5",
               "BoundingBoxes": [[
-                [-34.922428, -56.231242], // SW Corner
-                [-34.918832, -56.226848]  // NE Corner
+                [-34.935, -56.250],
+                [-34.900, -56.200]
               ]]
             };
             activeWebsocket.send(JSON.stringify(payload));
+            addLog("Mensaje de suscripción transmitido con bounding boxes.", "info");
           };
 
           activeWebsocket.onmessage = (event) => {
             try {
               const data = JSON.parse(event.data);
               
+              // Only process PositionReport
               if (data.MessageType === 'PositionReport') {
                 const meta = data.MetaData || {};
                 const msg = data.Message?.PositionReport || {};
                 
                 const mmsi = meta.MMSI;
-                const name = meta.ShipName || `MMSI ${mmsi}`;
+                // Fetch ShipName if available, otherwise use MMSI as placeholder
+                const name = meta.ShipName?.trim() || `MMSI ${mmsi}`;
                 const lat = msg.Latitude;
                 const lng = msg.Longitude;
                 const speed = msg.Sog || 0;
@@ -578,16 +736,16 @@
                 }
               }
             } catch (err) {
-              console.error("Error parsing WS message:", err);
+              console.error("Error decoding websocket stream payload:", err);
             }
           };
 
           activeWebsocket.onerror = (error) => {
-            addLog("Error de WebSocket aisstream.io.", "error");
+            addLog("Error en canal WebSocket. Activando simulación local automática.", "error");
           };
 
           activeWebsocket.onclose = () => {
-            addLog("Conexión con aisstream.io cerrada. Activando simulación local automática...", "warning");
+            addLog("Canal cerrado. Activando simulación local de la Bahía.", "warning");
             startLocalSimulation();
           };
 
@@ -597,60 +755,59 @@
         }
       }
 
-      // Montevideo Bay Dynamic Fallback Simulator
+      // Montevideo Harbor High-Fidelity Simulator
       function startLocalSimulation() {
         resetObservationState();
         setStatus('simulating');
-        addLog("Simulación de la Bahía de Montevideo activada.", "success");
-        addLog("Generando embarcaciones en curso de colisión o paso por la zona de radar...", "info");
+        addLog("Simulación de radar Montevideo iniciada.", "success");
+        addLog("Calculando trayectorias dentro del rango de 200 metros...", "info");
 
-        // Set up 4 distinct local vessels with realistic trajectories crossing the 200m zone
+        // Simulated vessels traversing the Montevideo harbour entrance & zone
         const SIMULATED_VESSELS = [
           {
-            mmsi: 228183000,
-            name: "ATLANTIC ACORD",
-            lat: -34.921500,
-            lng: -56.227200,
-            speed: 8.4,
-            cog: 250, // Travelling South-West
-            baseSpeed: 8.4,
-          },
-          {
-            mmsi: 351234000,
-            name: "ROU 04 ARTIGAS", // Armada Nacional
-            lat: -34.919800,
-            lng: -56.230100,
-            speed: 4.1,
-            cog: 110, // Travelling South-East
-            baseSpeed: 4.1,
-          },
-          {
-            mmsi: 538001234,
-            name: "BUQUEBUS FRANCISCO", // High Speed Ferry (Montevideo - Buenos Aires)
-            lat: -34.922800,
-            lng: -56.231500,
-            speed: 38.0,
-            cog: 35, // Travelling North-East fast!
-            baseSpeed: 38.0,
-          },
-          {
-            mmsi: 636012345,
+            mmsi: 770183000, // Uruguay MID
             name: "URUGUAY EXPLORER",
-            lat: -34.918900,
-            lng: -56.228500,
-            speed: 11.2,
-            cog: 185, // Travelling South
-            baseSpeed: 11.2,
+            lat: -34.921100,
+            lng: -56.227400,
+            speed: 8.5,
+            cog: 255, // SW direction
+            baseSpeed: 8.5
+          },
+          {
+            mmsi: 351234000, // Panama MID
+            name: "ATLANTIC ACE",
+            lat: -34.919700,
+            lng: -56.230200,
+            speed: 5.2,
+            cog: 105, // SE direction
+            baseSpeed: 5.2
+          },
+          {
+            mmsi: 538001234, // Marshall Islands MID
+            name: "CELESTE HARMONY",
+            lat: -34.922100,
+            lng: -56.231200,
+            speed: 14.1,
+            cog: 35, // NE direction
+            baseSpeed: 14.1
+          },
+          {
+            mmsi: 636012345, // Liberia MID
+            name: "MONTEVIDEO EXPRESS",
+            lat: -34.919200,
+            lng: -56.228100,
+            speed: 10.8,
+            cog: 175, // South direction
+            baseSpeed: 10.8
           }
         ];
 
-        // Trigger loop updates every 1.5 seconds
+        // Process step calculations every 1.5s
         activeSimulationInterval = setInterval(() => {
           SIMULATED_VESSELS.forEach(v => {
-            // Speed in meters per second
-            const speedMps = v.speed * 0.514444;
-            const dt = 1.5; // Seconds elapsed
-            const distanceMoved = speedMps * dt * 2.2; // Slightly accelerated movement for mapping fluidness
+            const speedMps = v.speed * 0.514444; // Knots to m/s
+            const dt = 1.5;
+            const distanceMoved = speedMps * dt * 2.0; // Slightly accelerated simulation
             
             const headingRad = (v.cog * Math.PI) / 180;
             const dy = distanceMoved * Math.cos(headingRad);
@@ -659,24 +816,23 @@
             v.lat += dy / 111000;
             v.lng += dx / (111000 * Math.cos(v.lat * Math.PI / 180));
             
-            // Add subtle random steering corrections
-            v.cog = (v.cog + (Math.random() * 6 - 3) + 360) % 360;
-            v.speed = Math.max(2, v.baseSpeed + (Math.random() * 1.5 - 0.75));
+            // Random direction drift & minor speed fluctuations
+            v.cog = (v.cog + (Math.random() * 8 - 4) + 360) % 360;
+            v.speed = Math.max(2, v.baseSpeed + (Math.random() * 1.6 - 0.8));
 
-            // Reset trajectory if too far from observer window (simulating entry of a new vessel)
-            const distToCenter = haversineDistance(v.lat, v.lng, CENTER_LAT, CENTER_LNG);
-            if (distToCenter > 1100) {
-              // Teleport back to opposing side to enter range again
-              v.lat = CENTER_LAT + (Math.random() * 0.008 - 0.004);
-              v.lng = CENTER_LNG + (Math.random() * 0.008 - 0.004);
+            // Reset loop to keep vessels returning back into view
+            const dist = haversineDistance(v.lat, v.lng, CENTER_LAT, CENTER_LNG);
+            if (dist > 1000) {
+              v.lat = CENTER_LAT + (Math.random() * 0.007 - 0.0035);
+              v.lng = CENTER_LNG + (Math.random() * 0.007 - 0.0035);
               v.cog = (Math.atan2(CENTER_LAT - v.lat, CENTER_LNG - v.lng) * 180 / Math.PI + 360) % 360;
             }
 
             processShipMessage(v.mmsi, v.name, v.lat, v.lng, v.speed, v.cog);
           });
           
-          // Housekeeping: remove stale vessels (e.g., if any simulator vessel breaks path)
-          const staleThreshold = Date.now() - 6000;
+          // Cleanup dead connections
+          const staleThreshold = Date.now() - 7000;
           shipsMap.forEach((ship, mmsi) => {
             if (ship.lastUpdated < staleThreshold) {
               if (ship.marker) map.removeLayer(ship.marker);
@@ -687,14 +843,38 @@
         }, 1500);
       }
 
-      // Setup Event Listeners
+      // COLLAPSIBLE LOGIC IMPLEMENTATION (Minimize/Maximize Bodies)
+      const setupCollapsible = (btnId, bodyId, iconId, initialText = '-') => {
+        const btn = document.getElementById(btnId);
+        const body = document.getElementById(bodyId);
+        const icon = document.getElementById(iconId);
+        let collapsed = false;
+
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          collapsed = !collapsed;
+          if (collapsed) {
+            body.classList.add('hidden');
+            icon.textContent = '+';
+          } else {
+            body.classList.remove('hidden');
+            icon.textContent = '-';
+          }
+        });
+      };
+
+      // Set up collapsible panels
+      setupCollapsible('btn-toggle-header', 'header-content', 'header-toggle-icon', '-');
+      setupCollapsible('btn-toggle-sidebar', 'sidebar-content', 'sidebar-toggle-icon', '-');
+
+      // Bind actions & listeners
       document.getElementById('btn-connect-ws').addEventListener('click', connectDirectWebsocket);
       document.getElementById('btn-simulation').addEventListener('click', startLocalSimulation);
       document.getElementById('btn-clear-logs').addEventListener('click', () => {
-        logConsole.innerHTML = '<div class="text-slate-500">> Consola de eventos vacía.</div>';
+        logConsole.innerHTML = '<div class="text-slate-500">> Logs limpiados. Listo.</div>';
       });
 
-      // Launch simulation on initial page load as elegant offline default
+      // Default load: launch high fidelity simulation
       startLocalSimulation();
 
     </script>
