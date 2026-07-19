@@ -96,7 +96,11 @@ async function startServer() {
     };
 
     try {
-      aisWs = new WebSocket("wss://stream.aisstream.io/v1/websocket");
+      aisWs = new WebSocket("wss://stream.aisstream.io/v1/websocket", {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        }
+      });
 
       aisWs.on("open", () => {
         console.log("AISStream WebSocket connected on server-side");
@@ -125,12 +129,12 @@ async function startServer() {
       });
 
       aisWs.on("error", (err: any) => {
-        console.error("AISStream WebSocket error, starting fallback simulation:", err.message || err);
+        console.warn("AISStream WebSocket connection status changed, starting fallback simulation:", err.message || err);
         const errMsg = err.message || String(err);
         try {
-          res.write(`data: ${JSON.stringify({ error: `Conexión con aisstream.io falló: ${errMsg}. Iniciando simulación local.`, fallback: true })}\n\n`);
+          res.write(`data: ${JSON.stringify({ error: `Conexión con aisstream.io: ${errMsg}. Iniciando simulación local.`, fallback: true })}\n\n`);
         } catch (writeErr) {
-          console.error("Error writing SSE fallback error message:", writeErr);
+          console.log("Status writing SSE fallback error message:", writeErr);
         }
         startFallbackSimulation();
       });
@@ -139,16 +143,16 @@ async function startServer() {
         console.log("AISStream WebSocket closed, starting fallback simulation if not active");
         if (!fallbackActive) {
           try {
-            res.write(`data: ${JSON.stringify({ error: "Conexión con aisstream.io cerrada. Iniciando simulación local.", fallback: true })}\n\n`);
+            res.write(`data: ${JSON.stringify({ error: "Conexión con aisstream.io cerrada o no disponible. Iniciando simulación local.", fallback: true })}\n\n`);
           } catch (writeErr) {
-            console.error("Error writing SSE close error message:", writeErr);
+            console.log("Status writing SSE close error message:", writeErr);
           }
         }
         startFallbackSimulation();
       });
 
     } catch (error: any) {
-      console.error("Error setting up server-side AIS WS, starting fallback simulation:", error);
+      console.warn("Handled server-side AIS WS exception, starting fallback simulation:", error);
       startFallbackSimulation();
     }
 
