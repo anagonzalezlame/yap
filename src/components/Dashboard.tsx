@@ -304,6 +304,7 @@ export default function Dashboard({
   });
   const [wsStatus, setWsStatus] = useState<'offline' | 'connecting' | 'online' | 'error'>('offline');
   const [wsError, setWsError] = useState<string | null>(null);
+  const [isFallbackActive, setIsFallbackActive] = useState<boolean>(false);
 
   // Helper to map raw AIS ship types to our application types
   const mapAisShipType = (typeNum: number): ShipType => {
@@ -322,38 +323,38 @@ export default function Dashboard({
     setWsStatus('connecting');
     setWsError(null);
 
-    let ws: WebSocket | null = null;
+    let eventSource: EventSource | null = null;
     let reconnectTimeout: any = null;
     let active = true;
 
     const connect = () => {
       try {
-        ws = new WebSocket("wss://stream.aisstream.io/ws");
+        const sseUrl = `/api/ais-stream?apiKey=${encodeURIComponent(apiKey)}`;
+        eventSource = new EventSource(sseUrl);
 
-        ws.onopen = () => {
+        eventSource.onopen = () => {
           if (!active) return;
           setWsStatus('online');
-          
-          // Bounding box for 1 km around CENTER_LAT, CENTER_LNG
-          const deltaLat = 1000 / 111000;
-          const deltaLng = 1000 / (111000 * Math.cos(CENTER_LAT * Math.PI / 180));
-          
-          const subscriptionMessage = {
-            APIKey: apiKey,
-            BoundingBoxes: [[
-              [CENTER_LAT - deltaLat * 1.5, CENTER_LNG - deltaLng * 1.5],
-              [CENTER_LAT + deltaLat * 1.5, CENTER_LNG + deltaLng * 1.5]
-            ]],
-            FiltersShipDecoders: [1, 2, 3, 5, 18, 19, 21]
-          };
-          
-          ws.send(JSON.stringify(subscriptionMessage));
         };
 
-        ws.onmessage = (event) => {
+        eventSource.onmessage = (event) => {
           if (!active) return;
           try {
             const aisMessage = JSON.parse(event.data);
+            
+            if (aisMessage.fallback) {
+              setIsFallbackActive(true);
+            } else {
+              setIsFallbackActive(false);
+            }
+
+            if (aisMessage.error) {
+              setWsError(aisMessage.error);
+              return;
+            } else if (aisMessage.clearError) {
+              setWsError(null);
+            }
+
             const metaData = aisMessage.MetaData;
             if (!metaData) return;
 
@@ -478,18 +479,14 @@ export default function Dashboard({
           }
         };
 
-        ws.onerror = (err) => {
+        eventSource.onerror = (err) => {
           if (!active) return;
-          console.error("AISStream WebSocket error:", err);
+          console.error("AISStream SSE connection error:", err);
           setWsStatus('error');
-          setWsError("Error de conexión. Verifique su API Key.");
+          setWsError("Error de conexión proxy. Verifique su API Key.");
+          if (eventSource) eventSource.close();
         };
 
-        ws.onclose = () => {
-          if (!active) return;
-          setWsStatus('connecting');
-          reconnectTimeout = setTimeout(connect, 5000);
-        };
       } catch (err: any) {
         if (!active) return;
         setWsStatus('error');
@@ -501,7 +498,7 @@ export default function Dashboard({
 
     return () => {
       active = false;
-      if (ws) ws.close();
+      if (eventSource) eventSource.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
   }, [useRealTime, apiKey]);
@@ -878,10 +875,17 @@ export default function Dashboard({
             
             {/* Status indicator badge */}
             {wsStatus === 'online' ? (
-              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[9px] font-mono tracking-wider font-semibold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                ONLINE
-              </span>
+              isFallbackActive ? (
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-[9px] font-mono tracking-wider font-semibold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                  SIMULADO (LIVE)
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[9px] font-mono tracking-wider font-semibold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  ONLINE
+                </span>
+              )
             ) : wsStatus === 'connecting' ? (
               <span className="px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 text-[9px] font-mono tracking-wider font-semibold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse"></span>
@@ -944,8 +948,15 @@ export default function Dashboard({
             </div>
 
             {wsError && (
-              <div className="text-[10px] text-rose-400 bg-rose-500/5 border border-rose-500/10 rounded-xl p-2 font-mono leading-normal">
-                {wsError}
+              <div className="space-y-1.5">
+                <div className="text-[10px] text-rose-400 bg-rose-500/5 border border-rose-500/10 rounded-xl p-2 font-mono leading-normal">
+                  {wsError}
+                </div>
+                {(wsError.includes('404') || wsError.includes('cerrada') || wsError.includes('falló')) && (
+                  <p className="text-[9px] text-amber-400/80 leading-normal px-1 font-sans">
+                    💡 <strong>Nota:</strong> Los errores de handshake (404/403) en aisstream.io ocurren cuando la API Key está vencida, es inválida, o cuando su servidor restringe IPs de nubes públicas. La simulación local se activa automáticamente para mantener el radar completamente funcional.
+                  </p>
+                )}
               </div>
             )}
           </div>
