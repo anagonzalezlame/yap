@@ -31,7 +31,7 @@
     </script>
     
     <style>
-      /* Smooth transitions */
+      /* Smooth transitions for collapse & expand */
       .transition-all-300 {
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       }
@@ -41,7 +41,7 @@
         background-color: #0b0f19 !important;
       }
       
-      /* Hide scrollbars */
+      /* Custom scrollbars */
       .no-scrollbar::-webkit-scrollbar {
         display: none;
       }
@@ -50,18 +50,18 @@
         scrollbar-width: none;
       }
       
-      /* Scanning radar wave effect */
+      /* Scanning radar wave animation */
       @keyframes radar-pulse {
         0% {
           transform: scale(0.1);
-          opacity: 0.8;
+          opacity: 0.85;
         }
         80% {
-          transform: scale(1.1);
+          transform: scale(1.15);
           opacity: 0;
         }
         100% {
-          transform: scale(1.1);
+          transform: scale(1.15);
           opacity: 0;
         }
       }
@@ -76,64 +76,83 @@
         border: none !important;
       }
       
-      /* Glassmorphism utility */
+      /* Dark Glassmorphism UI panel */
       .glass-panel {
-        background: rgba(8, 12, 24, 0.85);
+        background: rgba(8, 12, 24, 0.88);
         border: 1px solid rgba(255, 255, 255, 0.08);
-        box-shadow: 0 20px 45px -15px rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(12px);
+        box-shadow: 0 20px 45px -15px rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(14px);
+      }
+
+      /* Compact collapsed panel state */
+      .panel-collapsed {
+        opacity: 0.85;
+      }
+      .panel-collapsed:hover {
+        opacity: 1;
       }
     </style>
   </head>
   <body class="h-full overflow-hidden font-sans text-slate-100 antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
 
-    <!-- Main Map Background -->
+    <!-- Main Live Leaflet Map Container -->
     <div id="map" class="absolute inset-0 z-0 h-full w-full"></div>
 
-    <!-- MAIN DASHBOARD OVERLAYS (Pointer events none so map works perfectly underneath) -->
-    <div class="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between p-4 md:flex-row md:items-start md:gap-4 overflow-hidden">
+    <!-- GLOBAL MINIMIZE ALL / RESTORE FLOATING TOOLBAR (Top Center) -->
+    <div class="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center">
+      <button id="btn-minimize-all" class="pointer-events-auto flex items-center gap-2 rounded-full border border-cyan-500/30 bg-slate-950/90 px-4 py-1.5 text-xs font-semibold text-cyan-300 shadow-2xl backdrop-blur-md hover:bg-cyan-950/80 hover:border-cyan-400 transition-all-300 active:scale-95">
+        <svg id="icon-minimize-all" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-3.5 w-3.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" />
+        </svg>
+        <span id="text-minimize-all">Minimizar Todo</span>
+      </button>
+    </div>
+
+    <!-- MAIN DASHBOARD OVERLAYS (Pointer events none so live map works underneath) -->
+    <div class="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between p-4 md:flex-row md:items-start md:gap-4 overflow-hidden pt-12 md:pt-4">
       
-      <!-- LEFT COLUMN: HEADER AND LIVE LOGS -->
-      <div class="flex flex-col gap-3 w-full md:w-96 max-h-full">
+      <!-- LEFT COLUMN: HEADER, CONTROL CONSOLE & LEGEND -->
+      <div class="flex flex-col gap-3 w-full md:w-96 max-h-full overflow-y-auto no-scrollbar">
         
-        <!-- HEADER PANEL (Collapsible) -->
+        <!-- 1. HEADER PANEL (Collapsible) -->
         <div id="header-panel" class="pointer-events-auto glass-panel flex flex-col rounded-xl overflow-hidden transition-all duration-300">
-          <!-- Title / Header Row -->
           <div class="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] bg-slate-950/40">
             <div class="flex items-center gap-2.5">
               <div class="relative flex h-3.5 w-3.5">
                 <span id="header-pulse-light" class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
                 <span id="header-static-light" class="relative inline-flex h-3.5 w-3.5 rounded-full bg-emerald-500"></span>
               </div>
-              <h1 class="font-display text-sm font-bold tracking-tight text-white uppercase">
+              <h1 class="font-display text-xs md:text-sm font-bold tracking-tight text-white uppercase">
                 Tráfico Bahía Montevideo
               </h1>
             </div>
-            <!-- Minimize/Maximize Button -->
-            <button id="btn-toggle-header" class="flex h-6 w-6 items-center justify-center rounded bg-white/[0.04] text-slate-400 hover:text-white hover:bg-white/[0.1] transition-all-300" title="Minimizar/Maximizar Panel">
+            <!-- Minimize Button -->
+            <button id="btn-toggle-header" class="flex h-6 w-6 items-center justify-center rounded bg-white/[0.05] text-slate-400 hover:text-white hover:bg-white/[0.12] transition-all-300" title="Minimizar / Expandir">
               <span id="header-toggle-icon" class="font-mono text-xs font-bold">-</span>
             </button>
           </div>
           
-          <!-- Collapsible Content Body -->
           <div id="header-content" class="flex flex-col gap-3 p-4 transition-all duration-300">
-            <p class="text-xs text-slate-400 leading-normal">
-              Conexión automática en vivo con <span class="text-white font-semibold">AISStream API</span> para monitorear buques que navegan en un rango de <span class="font-mono text-emerald-400 font-semibold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">1000 metros</span> de la ventana de observación.
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Monitoreo automático en tiempo real con <span class="text-white font-semibold">AISStream WebSockets</span> de embarcaciones transitando la ventana de la Bahía de Montevideo.
             </p>
             <div class="flex flex-col gap-1.5 border-t border-white/[0.06] pt-3 text-[11px] font-mono text-slate-400">
               <div class="flex justify-between">
                 <span>COORDENADAS</span>
                 <span class="text-white font-medium">-34.920630, -56.229045</span>
               </div>
-              <div class="flex justify-between">
-                <span>RANGO DEL RADAR</span>
-                <span class="text-emerald-400 font-medium">RADIO 1.0 KM (1000M)</span>
+              <div class="flex justify-between items-center">
+                <span>RANGO RADAR</span>
+                <div class="flex items-center gap-1">
+                  <button id="btn-range-200" class="px-2 py-0.5 text-[10px] rounded border border-cyan-500/30 bg-cyan-950/40 text-cyan-300 font-semibold hover:bg-cyan-900/50">200m</button>
+                  <button id="btn-range-1000" class="px-2 py-0.5 text-[10px] rounded border border-emerald-500/40 bg-emerald-500/20 text-emerald-300 font-bold">1000m</button>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- RADAR CONTROLLER / CONSOLE PANEL (Collapsible) -->
+        <!-- 2. CONTROL CONSOLE PANEL (Collapsible) -->
         <div id="control-panel" class="pointer-events-auto glass-panel flex flex-col rounded-xl overflow-hidden transition-all duration-300">
           <div class="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] bg-slate-950/40">
             <div class="flex items-center gap-2">
@@ -143,20 +162,19 @@
                 <span id="status-text">Conectando...</span>
               </div>
             </div>
-            <!-- Minimize/Maximize Button -->
-            <button id="btn-toggle-control" class="flex h-6 w-6 items-center justify-center rounded bg-white/[0.04] text-slate-400 hover:text-white hover:bg-white/[0.1] transition-all-300" title="Minimizar/Maximizar Panel">
+            <!-- Minimize Button -->
+            <button id="btn-toggle-control" class="flex h-6 w-6 items-center justify-center rounded bg-white/[0.05] text-slate-400 hover:text-white hover:bg-white/[0.12] transition-all-300" title="Minimizar / Expandir">
               <span id="control-toggle-icon" class="font-mono text-xs font-bold">-</span>
             </button>
           </div>
           
           <div id="control-content" class="p-4 flex flex-col gap-3 transition-all duration-300">
-            <!-- Manual reconnect / switch controls if needed -->
             <div class="grid grid-cols-2 gap-2 text-xs">
               <button id="btn-reconnect" class="flex items-center justify-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-3 py-2 font-semibold text-white shadow-lg transition-all-300 active:scale-95">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="h-3.5 w-3.5">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
                 </svg>
-                Reconectar En Vivo
+                Reconectar Stream
               </button>
               <button id="btn-toggle-mute" class="flex items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 hover:text-white px-3 py-2 font-semibold text-slate-300 transition-all-300 active:scale-95">
                 <span id="sound-indicator-text">Radar Silencioso</span>
@@ -166,12 +184,38 @@
             <!-- Terminal output window -->
             <div class="flex flex-col rounded-lg border border-slate-800 bg-slate-950 p-2.5">
               <div class="mb-1.5 flex items-center justify-between text-[10px] font-mono uppercase text-slate-500">
-                <span>Registro de Transmisor AIS</span>
+                <span>Consola AIS en Vivo</span>
                 <button id="btn-clear-logs" class="hover:text-slate-300 transition-colors">Limpiar</button>
               </div>
-              <div id="log-console" class="no-scrollbar h-24 overflow-y-auto font-mono text-[10px] text-slate-400 space-y-1">
-                <div class="text-slate-500">> Iniciando conexión autónoma con el stream en vivo de Montevideo...</div>
+              <div id="log-console" class="no-scrollbar h-20 overflow-y-auto font-mono text-[10px] text-slate-400 space-y-1">
+                <div class="text-slate-500">> Conectando con servicio aisstream.io en tiempo real...</div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. MAP LEGEND & RADAR SUMMARY PANEL (Collapsible) -->
+        <div id="legend-panel" class="pointer-events-auto glass-panel flex flex-col rounded-xl overflow-hidden transition-all duration-300">
+          <div class="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06] bg-slate-950/40">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-display">Leyenda del Mapa</span>
+            <!-- Minimize Button -->
+            <button id="btn-toggle-legend" class="flex h-6 w-6 items-center justify-center rounded bg-white/[0.05] text-slate-400 hover:text-white hover:bg-white/[0.12] transition-all-300" title="Minimizar / Expandir">
+              <span id="legend-toggle-icon" class="font-mono text-xs font-bold">-</span>
+            </button>
+          </div>
+          
+          <div id="legend-content" class="p-3.5 flex flex-col gap-2 text-xs font-mono transition-all duration-300">
+            <div class="flex items-center gap-2.5">
+              <span class="flex h-3 w-3 rounded-full border-2 border-emerald-400 bg-emerald-500/30"></span>
+              <span class="text-slate-300">Observatorio (Mi Ventana)</span>
+            </div>
+            <div class="flex items-center gap-2.5">
+              <span class="flex h-3 w-3 items-center justify-center text-cyan-400">▲</span>
+              <span class="text-slate-300">Buque en Rango (<span id="legend-range-text">1000m</span>)</span>
+            </div>
+            <div class="flex items-center gap-2.5">
+              <span class="flex h-2.5 w-2.5 rounded-full border border-emerald-500/50 bg-emerald-500/10"></span>
+              <span class="text-slate-400 text-[11px]">Perímetro de Cobertura</span>
             </div>
           </div>
         </div>
@@ -182,60 +226,53 @@
       <div id="alert-banner" class="pointer-events-auto hidden animate-bounce self-center items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-950/90 px-3.5 py-2 shadow-2xl backdrop-blur">
         <span class="flex h-2.5 w-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
         <span class="font-mono text-xs font-semibold uppercase tracking-wider text-cyan-200">
-          ¡Detección activa en rango de 1000m!
+          ¡Detección activa en rango del radar!
         </span>
       </div>
 
       <!-- RIGHT COLUMN: SIDEBAR LIST & DETAIL CARD -->
-      <div class="flex flex-col gap-3 w-full md:w-96 max-h-full">
+      <div class="flex flex-col gap-3 w-full md:w-96 max-h-full overflow-y-auto no-scrollbar">
         
-        <!-- SIDEBAR PANEL ("Lista de Buques en Zona") (Collapsible) -->
+        <!-- 4. SIDEBAR PANEL ("Lista de Buques en Zona") (Collapsible) -->
         <div id="sidebar-panel" class="pointer-events-auto glass-panel flex flex-col rounded-xl overflow-hidden transition-all duration-300">
-          
-          <!-- Header title bar -->
           <div class="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] bg-slate-950/40">
             <div class="flex items-center gap-2">
-              <h2 class="font-display text-sm font-bold tracking-wide text-white uppercase">
-                Buques en Zona (1km)
+              <h2 class="font-display text-xs md:text-sm font-bold tracking-wide text-white uppercase">
+                Buques en Zona
               </h2>
               <div class="flex items-center justify-center rounded-md bg-emerald-500/15 px-2 py-0.5 border border-emerald-500/20">
                 <span class="text-[11px] font-mono font-bold text-emerald-400" id="ship-count">0</span>
               </div>
             </div>
-            <!-- Minimize/Maximize Button -->
-            <button id="btn-toggle-sidebar" class="flex h-6 w-6 items-center justify-center rounded bg-white/[0.04] text-slate-400 hover:text-white hover:bg-white/[0.1] transition-all-300" title="Minimizar/Maximizar Panel">
+            <!-- Minimize Button -->
+            <button id="btn-toggle-sidebar" class="flex h-6 w-6 items-center justify-center rounded bg-white/[0.05] text-slate-400 hover:text-white hover:bg-white/[0.12] transition-all-300" title="Minimizar / Expandir">
               <span id="sidebar-toggle-icon" class="font-mono text-xs font-bold">-</span>
             </button>
           </div>
 
-          <!-- Collapsible List Body -->
           <div id="sidebar-content" class="flex flex-col p-4 overflow-hidden transition-all duration-300 max-h-[380px]">
-            <!-- Vessel list container -->
             <div id="ship-list-container" class="no-scrollbar overflow-y-auto space-y-2 max-h-[340px]">
-              <!-- No Ships Placeholder -->
-              <div id="no-ships-placeholder" class="flex h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-800 p-4 text-center">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-8 w-8 text-slate-600">
+              <div id="no-ships-placeholder" class="flex h-36 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-800 p-4 text-center">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-7 w-7 text-slate-600">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.637 10.637z" />
                 </svg>
                 <div class="text-xs font-medium text-slate-400">Canal Despejado</div>
-                <p class="text-[10px] text-slate-500 max-w-xs">No se detectan buques transmitiendo en el radio de 1000m.</p>
+                <p class="text-[10px] text-slate-500 max-w-xs">No hay buques transmitiendo dentro del radio establecido.</p>
               </div>
             </div>
           </div>
-
         </div>
 
-        <!-- SHIP DETAIL CARD (Populates when ship is clicked) -->
-        <div id="detail-panel" class="pointer-events-auto hidden flex-col gap-3 rounded-xl border border-cyan-500/30 bg-slate-950/95 p-4 shadow-2xl backdrop-blur-md transition-all-300">
-          <div class="flex items-center justify-between border-b border-white/[0.06] pb-2">
+        <!-- 5. SHIP DETAIL PANEL (Populates when ship is clicked) (Collapsible) -->
+        <div id="detail-panel" class="pointer-events-auto hidden flex-col rounded-xl border border-cyan-500/30 bg-slate-950/95 shadow-2xl backdrop-blur-md transition-all-300 overflow-hidden">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] bg-slate-900/60">
             <div class="flex items-center gap-2">
               <img id="detail-flag" src="" class="h-3 w-5 object-cover rounded shadow" alt="flag" referrerPolicy="no-referrer" />
               <h3 class="font-display text-xs font-bold uppercase tracking-wider text-cyan-400" id="detail-name">BUQUE</h3>
             </div>
-            <div class="flex items-center gap-1">
-              <!-- Minimize Detail Button -->
-              <button id="btn-toggle-detail" class="flex h-5 w-5 items-center justify-center rounded bg-white/[0.04] text-slate-400 hover:text-white hover:bg-white/[0.1] transition-all-300" title="Minimizar">
-                <span id="detail-toggle-icon" class="font-mono text-[10px] font-bold">-</span>
+            <div class="flex items-center gap-1.5">
+              <button id="btn-toggle-detail" class="flex h-6 w-6 items-center justify-center rounded bg-white/[0.05] text-slate-400 hover:text-white hover:bg-white/[0.12] transition-all-300" title="Minimizar / Expandir">
+                <span id="detail-toggle-icon" class="font-mono text-xs font-bold">-</span>
               </button>
               <button id="btn-close-detail" class="text-slate-400 hover:text-white p-1">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="h-3.5 w-3.5">
@@ -245,7 +282,7 @@
             </div>
           </div>
           
-          <div id="detail-content" class="grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs font-mono transition-all duration-300">
+          <div id="detail-content" class="grid grid-cols-2 gap-x-4 gap-y-2.5 p-4 text-xs font-mono transition-all duration-300">
             <div>
               <span class="block text-[9px] uppercase text-slate-500">MMSI</span>
               <span class="text-slate-200 font-semibold" id="detail-mmsi">000000000</span>
@@ -259,11 +296,11 @@
               <span class="text-emerald-400 font-bold" id="detail-distance">0 m</span>
             </div>
             <div>
-              <span class="block text-[9px] uppercase text-slate-500">País / Bandera</span>
+              <span class="block text-[9px] uppercase text-slate-500">Bandera / País</span>
               <span class="text-slate-200 font-semibold" id="detail-country">N/A</span>
             </div>
-            <div class="col-span-2">
-              <span class="block text-[9px] uppercase text-slate-500">Posición Exacta</span>
+            <div class="col-span-2 border-t border-slate-800/80 pt-2">
+              <span class="block text-[9px] uppercase text-slate-500">Coordenadas Exactas</span>
               <span class="text-slate-300 text-[11px]" id="detail-coords">-00.00000, -00.00000</span>
             </div>
           </div>
@@ -279,17 +316,17 @@
       // Coordinates of observatory point (Montevideo Bay)
       const CENTER_LAT = -34.920630;
       const CENTER_LNG = -56.229045;
-      const SCAN_RADIUS_METERS = 1000; // Updated to 1000 meters range
+      let SCAN_RADIUS_METERS = 1000; // Default range radius in meters
 
-      // Leaflet Map Initialization - zoom level 15 fits a 1000-meter radius circle beautifully
+      // Leaflet Map Initialization - CartoDB Dark Matter live tile layer
       const map = L.map('map', {
         zoomControl: false,
         attributionControl: false
       }).setView([CENTER_LAT, CENTER_LNG], 15);
 
-      // CartoDB Dark Matter tile layer
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 20
+        maxZoom: 20,
+        subdomains: 'abcd'
       }).addTo(map);
 
       // Add zoom buttons top right
@@ -297,7 +334,7 @@
         position: 'topright'
       }).addTo(map);
 
-      // Fixed Marker Representing 'My Window' (Observatory Point)
+      // Fixed Center Marker (Observatory Point)
       const windowIcon = L.divIcon({
         className: 'custom-center-marker',
         html: `
@@ -317,23 +354,23 @@
 
       const myWindowMarker = L.marker([CENTER_LAT, CENTER_LNG], { icon: windowIcon })
         .addTo(map)
-        .bindTooltip("<b>Mi Ventana (Observatorio)</b><br>Bahía de Montevideo (Radio 1km)", {
+        .bindTooltip("<b>Mi Ventana (Observatorio)</b><br>Bahía de Montevideo", {
           permanent: false,
           direction: 'top',
           className: 'bg-slate-950 text-slate-100 border border-slate-800 rounded font-sans text-xs px-2.5 py-1 shadow-2xl'
         });
 
-      // Subtle 1000-meter range circle
+      // Range Circle
       const scanCircle = L.circle([CENTER_LAT, CENTER_LNG], {
         radius: SCAN_RADIUS_METERS,
-        color: '#10b981', // emerald-500
+        color: '#10b981',
         fillColor: '#10b981',
         fillOpacity: 0.05,
         weight: 1.5,
         dashArray: '5, 8'
       }).addTo(map);
 
-      // Audio alarm sound setup for ship detection
+      // Audio sonar alert
       let audioMuted = true;
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       function playPingSound() {
@@ -342,7 +379,7 @@
           const osc = audioCtx.createOscillator();
           const gain = audioCtx.createGain();
           osc.type = 'sine';
-          osc.frequency.setValueAtTime(880, audioCtx.currentTime); // High pitch sonar sound
+          osc.frequency.setValueAtTime(880, audioCtx.currentTime);
           gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
           gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.2);
           osc.connect(gain);
@@ -354,7 +391,7 @@
         }
       }
 
-      // Maritime Identification Digits (MID) mapped to ISO 3166-1 country names and codes
+      // MID codes to country map
       const MID_CODES = {
         '770': { code: 'uy', name: 'Uruguay' },
         '351': { code: 'pa', name: 'Panamá' },
@@ -365,88 +402,26 @@
         '356': { code: 'pa', name: 'Panamá' },
         '357': { code: 'pa', name: 'Panamá' },
         '370': { code: 'pa', name: 'Panamá' },
-        '371': { code: 'pa', name: 'Panamá' },
-        '372': { code: 'pa', name: 'Panamá' },
-        '373': { code: 'pa', name: 'Panamá' },
-        '374': { code: 'pa', name: 'Panamá' },
         '311': { code: 'bs', name: 'Bahamas' },
         '538': { code: 'mh', name: 'Islas Marshall' },
         '636': { code: 'lr', name: 'Liberia' },
         '563': { code: 'sg', name: 'Singapur' },
-        '564': { code: 'sg', name: 'Singapur' },
-        '565': { code: 'sg', name: 'Singapur' },
-        '566': { code: 'sg', name: 'Singapur' },
         '477': { code: 'hk', name: 'Hong Kong' },
         '256': { code: 'mt', name: 'Malta' },
         '215': { code: 'gr', name: 'Grecia' },
-        '210': { code: 'cy', name: 'Chipre' },
         '244': { code: 'nl', name: 'Países Bajos' },
         '224': { code: 'es', name: 'España' },
         '228': { code: 'fr', name: 'Francia' },
         '211': { code: 'de', name: 'Alemania' },
         '247': { code: 'it', name: 'Italia' },
-        '273': { code: 'ru', name: 'Rusia' },
         '232': { code: 'gb', name: 'Reino Unido' },
-        '233': { code: 'gb', name: 'Reino Unido' },
-        '234': { code: 'gb', name: 'Reino Unido' },
-        '235': { code: 'gb', name: 'Reino Unido' },
         '366': { code: 'us', name: 'Estados Unidos' },
-        '367': { code: 'us', name: 'Estados Unidos' },
-        '368': { code: 'us', name: 'Estados Unidos' },
-        '369': { code: 'us', name: 'Estados Unidos' },
         '701': { code: 'ar', name: 'Argentina' },
         '710': { code: 'br', name: 'Brasil' },
         '725': { code: 'cl', name: 'Chile' },
-        '740': { code: 'co', name: 'Colombia' },
-        '760': { code: 'pe', name: 'Perú' },
-        '412': { code: 'cn', name: 'China' },
-        '413': { code: 'cn', name: 'China' },
-        '414': { code: 'cn', name: 'China' },
-        '419': { code: 'in', name: 'India' },
-        '431': { code: 'jp', name: 'Japón' },
-        '432': { code: 'jp', name: 'Japón' },
-        '440': { code: 'kr', name: 'Corea del Sur' },
-        '441': { code: 'kr', name: 'Corea del Sur' },
-        '503': { code: 'au', name: 'Australia' },
-        '512': { code: 'nz', name: 'Nueva Zelanda' },
-        '312': { code: 'bz', name: 'Belice' },
-        '314': { code: 'bb', name: 'Barbados' },
-        '316': { code: 'ca', name: 'Canadá' },
-        '319': { code: 'ky', name: 'Islas Caimán' },
-        '321': { code: 'cr', name: 'Costa Rica' },
-        '325': { code: 'dm', name: 'Dominica' },
-        '327': { code: 'do', name: 'República Dominicana' },
-        '334': { code: 'hn', name: 'Honduras' },
-        '336': { code: 'jm', name: 'Jamaica' },
-        '341': { code: 'kn', name: 'San Cristóbal y Nieves' },
-        '343': { code: 'lc', name: 'Santa Lucía' },
-        '345': { code: 'mx', name: 'México' },
-        '350': { code: 'ni', name: 'Nicaragua' },
-        '378': { code: 'vg', name: 'Islas Vírgenes Británicas' },
-        '361': { code: 'vc', name: 'San Vicente y las Granadinas' },
-        '375': { code: 'vc', name: 'San Vicente y las Granadinas' },
-        '376': { code: 'vc', name: 'San Vicente y las Granadinas' },
-        '377': { code: 'vc', name: 'San Vicente y las Granadinas' },
-        '457': { code: 'my', name: 'Malasia' },
-        '533': { code: 'my', name: 'Malasia' },
-        '525': { code: 'id', name: 'Indonesia' },
-        '567': { code: 'th', name: 'Tailandia' },
-        '574': { code: 'vn', name: 'Vietnam' },
-        '745': { code: 'ec', name: 'Ecuador' },
-        '765': { code: 'py', name: 'Paraguay' },
-        '775': { code: 've', name: 'Venezuela' },
-        '205': { code: 'be', name: 'Bélgica' },
-        '219': { code: 'dk', name: 'Dinamarca' },
-        '220': { code: 'se', name: 'Suecia' },
-        '265': { code: 'se', name: 'Suecia' },
-        '266': { code: 'se', name: 'Suecia' },
-        '230': { code: 'fi', name: 'Finlandia' },
-        '242': { code: 'no', name: 'Noruega' },
-        '257': { code: 'pt', name: 'Portugal' },
-        '304': { code: 'ca', name: 'Canadá' }
+        '412': { code: 'cn', name: 'China' }
       };
 
-      // Resolve country registration details based on MMSI number
       function getCountryFromMMSI(mmsi) {
         if (!mmsi) return { code: 'un', name: 'Desconocido' };
         const mmsiStr = String(mmsi);
@@ -458,11 +433,10 @@
       // App States
       let activeWebsocket = null;
       let reconnectInterval = null;
-      const shipsMap = new Map(); // MMSI -> Ship details object
+      const shipsMap = new Map();
 
-      // Haversine formula to compute exact distance in meters between two lat/lon coordinates
       function haversineDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371000; // Radius of Earth in meters
+        const R = 6371000;
         const dLat = (lat2 - lat1) * Math.PI / 180;
         const dLon = (lon2 - lon1) * Math.PI / 180;
         const a = 
@@ -473,7 +447,6 @@
         return R * c;
       }
 
-      // Logging inside events console
       const logConsole = document.getElementById('log-console');
       function addLog(message, type = 'info') {
         const timestamp = new Date().toLocaleTimeString();
@@ -489,7 +462,6 @@
         logConsole.scrollTop = logConsole.scrollHeight;
       }
 
-      // Connection state visualization helper
       function setStatus(status) {
         const badge = document.getElementById('status-badge');
         const text = document.getElementById('status-text');
@@ -519,20 +491,16 @@
         }
       }
 
-      // Generate customized direction marker arrow HTML
       function getShipMarkerHTML(cog, name, inside) {
         const rotation = cog ? `transform: rotate(${cog}deg);` : '';
         const color = inside ? 'text-cyan-400 fill-cyan-400' : 'text-slate-500 fill-slate-500';
         const ringColor = inside ? 'bg-cyan-500/20' : 'bg-slate-500/10';
         return `
           <div class="relative flex flex-col items-center justify-center">
-            <!-- Miniature label -->
             <div class="absolute -top-7 whitespace-nowrap bg-slate-950/90 text-[9px] text-slate-100 font-mono px-1.5 py-0.5 rounded border border-white/10 shadow-md pointer-events-none uppercase">
               ${name || 'MMSI'}
             </div>
-            <!-- Glow pulse circle -->
             <div class="absolute w-8 h-8 ${ringColor} rounded-full animate-pulse"></div>
-            <!-- Dynamic arrow pointing to COG direction -->
             <div style="${rotation}" class="relative w-4 h-5 flex items-center justify-center transition-transform duration-500">
               <svg viewBox="0 0 24 24" class="w-4 h-5 ${color} filter drop-shadow">
                 <path d="M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z" />
@@ -542,7 +510,6 @@
         `;
       }
 
-      // Detail card panel populate & view toggle
       function showShipDetails(ship) {
         const panel = document.getElementById('detail-panel');
         const countryInfo = getCountryFromMMSI(ship.mmsi);
@@ -554,7 +521,6 @@
         document.getElementById('detail-country').textContent = countryInfo.name;
         document.getElementById('detail-coords').textContent = `${ship.lat.toFixed(6)}, ${ship.lng.toFixed(6)}`;
         
-        // Load ISO Flag image dynamically using FlagCDN
         const flagImg = document.getElementById('detail-flag');
         flagImg.src = `https://flagcdn.com/w20/${countryInfo.code}.png`;
         flagImg.onerror = () => { flagImg.src = "https://flagcdn.com/w20/un.png"; };
@@ -562,25 +528,21 @@
         panel.classList.remove('hidden');
         panel.classList.add('flex');
         
-        // Reset minimized details view state
         const detailContent = document.getElementById('detail-content');
         const toggleIcon = document.getElementById('detail-toggle-icon');
         detailContent.classList.remove('hidden');
         toggleIcon.textContent = '-';
       }
 
-      // Close Details panel click handler
       document.getElementById('btn-close-detail').addEventListener('click', () => {
         document.getElementById('detail-panel').classList.add('hidden');
       });
 
-      // Synchronize Live Vessel Cards list to Sidebar UI
       function renderShipsUI() {
         const container = document.getElementById('ship-list-container');
         const countBadge = document.getElementById('ship-count');
         const alertBanner = document.getElementById('alert-banner');
         
-        // Filter strictly to ships within 1000m zone
         const activeShips = Array.from(shipsMap.values()).filter(s => s.distance <= SCAN_RADIUS_METERS);
         
         countBadge.textContent = activeShips.length;
@@ -592,7 +554,6 @@
           alertBanner.classList.add('hidden');
         }
 
-        // Clean out previous cards, preserve placeholder when empty
         const listItems = container.querySelectorAll('.vessel-card');
         listItems.forEach(el => el.remove());
 
@@ -602,8 +563,6 @@
         }
 
         document.getElementById('no-ships-placeholder').classList.add('hidden');
-
-        // Sort by closest distance to window
         activeShips.sort((a, b) => a.distance - b.distance);
 
         activeShips.forEach(ship => {
@@ -635,18 +594,16 @@
         });
       }
 
-      // Add or update active vessel state from live message
       function processShipMessage(mmsi, name, lat, lng, speed, cog) {
         const distance = haversineDistance(lat, lng, CENTER_LAT, CENTER_LNG);
         const inside = distance <= SCAN_RADIUS_METERS;
 
-        // Strict <= 1000m filter rule
         if (!inside) {
           if (shipsMap.has(mmsi)) {
             const oldShip = shipsMap.get(mmsi);
             if (oldShip.marker) map.removeLayer(oldShip.marker);
             shipsMap.delete(mmsi);
-            addLog(`Buque [${name || mmsi}] abandonó el radio del radar de 1km`, 'info');
+            addLog(`Buque [${name || mmsi}] salió del radio (${SCAN_RADIUS_METERS}m)`, 'info');
             renderShipsUI();
           }
           return;
@@ -669,7 +626,6 @@
         `;
 
         if (shipsMap.has(mmsi)) {
-          // Update existing ship marker coordinates & properties
           const ship = shipsMap.get(mmsi);
           ship.lat = lat;
           ship.lng = lng;
@@ -682,8 +638,7 @@
           ship.marker.setIcon(customMarkerIcon);
           ship.marker.setTooltipContent(tooltipHTML);
         } else {
-          // New ship entering the 1000m window detection range
-          addLog(`¡CONTACTO EN VIVO! [${name || mmsi}] de ${countryInfo.name} a ${Math.round(distance)}m`, 'success');
+          addLog(`¡NUEVA DETECCIÓN EN VIVO! [${name || mmsi}] a ${Math.round(distance)}m`, 'success');
           playPingSound();
           
           const marker = L.marker([lat, lng], { icon: customMarkerIcon }).addTo(map);
@@ -711,7 +666,6 @@
         renderShipsUI();
       }
 
-      // Clean active visual state
       function clearAllShips() {
         shipsMap.forEach(ship => {
           if (ship.marker) map.removeLayer(ship.marker);
@@ -721,7 +675,7 @@
         document.getElementById('detail-panel').classList.add('hidden');
       }
 
-      // Connect Directly to stream.aisstream.io WebSocket API
+      // Connect to stream.aisstream.io WebSocket API continuously
       function connectLiveWebsocket() {
         if (activeWebsocket) {
           activeWebsocket.close();
@@ -730,16 +684,15 @@
         
         clearAllShips();
         setStatus('connecting');
-        addLog("Conectando con stream.aisstream.io...", "warning");
+        addLog("Iniciando WebSocket con stream.aisstream.io...", "warning");
 
         try {
           activeWebsocket = new WebSocket("wss://stream.aisstream.io/v0/stream");
 
           activeWebsocket.onopen = () => {
-            addLog("Estación radar acoplada a AISStream en vivo.", "success");
+            addLog("Estación radar acoplada a AISStream.", "success");
             setStatus('connected');
 
-            // Exact subscription payload structure provided
             const payload = {
               "APIKey": "eb8c73d7cfad425458c057a722132a0c516b7ef5",
               "BoundingBoxes": [[
@@ -748,7 +701,7 @@
               ]]
             };
             activeWebsocket.send(JSON.stringify(payload));
-            addLog("Suscripción de coordenadas enviada a la API.", "info");
+            addLog("Suscripción enviada para Bahía de Montevideo.", "info");
           };
 
           activeWebsocket.onmessage = (event) => {
@@ -771,20 +724,19 @@
                 }
               }
             } catch (err) {
-              console.error("Error decode payload:", err);
+              console.error("Decode error:", err);
             }
           };
 
           activeWebsocket.onerror = (error) => {
-            addLog("Fallo de canal WebSocket. Reintentando de forma automática...", "error");
+            addLog("Error en transmisión AIS WebSocket.", "error");
             setStatus('disconnected');
           };
 
           activeWebsocket.onclose = () => {
-            addLog("Conexión finalizada por el servidor. Reintentando...", "warning");
+            addLog("WebSocket cerrado. Reintentando conexión...", "warning");
             setStatus('disconnected');
             
-            // Auto reconnect every 10 seconds if disconnected
             if (!reconnectInterval) {
               reconnectInterval = setTimeout(() => {
                 reconnectInterval = null;
@@ -794,46 +746,112 @@
           };
 
         } catch (err) {
-          addLog(`Error de conexión: ${err.message}`, "error");
+          addLog(`Error de inicio: ${err.message}`, "error");
           setStatus('disconnected');
         }
       }
 
-      // COLLAPSIBLE LOGIC IMPLEMENTATION (Minimize/Maximize Bodies)
-      const setupCollapsible = (btnId, bodyId, iconId) => {
+      // COLLAPSIBLE LOGIC IMPLEMENTATION FOR INDIVIDUAL PANELS
+      const panelsState = new Map(); // bodyId -> boolean (collapsed)
+
+      const setupCollapsible = (btnId, bodyId, iconId, panelId) => {
         const btn = document.getElementById(btnId);
         const body = document.getElementById(bodyId);
         const icon = document.getElementById(iconId);
-        let collapsed = false;
+        const panel = panelId ? document.getElementById(panelId) : null;
+        
+        panelsState.set(bodyId, false);
 
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
-          collapsed = !collapsed;
-          if (collapsed) {
-            body.classList.add('hidden');
-            icon.textContent = '+';
-          } else {
-            body.classList.remove('hidden');
-            icon.textContent = '-';
-          }
+          const isCollapsed = !panelsState.get(bodyId);
+          setPanelCollapsed(bodyId, iconId, isCollapsed, panel);
+          updateGlobalMinimizeButtonState();
         });
       };
 
-      // Set up collapsible panels for Header, Control panel, Sidebar list, and Detail Card
-      setupCollapsible('btn-toggle-header', 'header-content', 'header-toggle-icon');
-      setupCollapsible('btn-toggle-control', 'control-content', 'control-toggle-icon');
-      setupCollapsible('btn-toggle-sidebar', 'sidebar-content', 'sidebar-toggle-icon');
-      setupCollapsible('btn-toggle-detail', 'detail-content', 'detail-toggle-icon');
+      function setPanelCollapsed(bodyId, iconId, collapse, panel) {
+        const body = document.getElementById(bodyId);
+        const icon = document.getElementById(iconId);
+        if (!body || !icon) return;
 
-      // Bind logs cleanup
+        panelsState.set(bodyId, collapse);
+        if (collapse) {
+          body.classList.add('hidden');
+          icon.textContent = '+';
+          if (panel) panel.classList.add('panel-collapsed');
+        } else {
+          body.classList.remove('hidden');
+          icon.textContent = '-';
+          if (panel) panel.classList.remove('panel-collapsed');
+        }
+      }
+
+      // Setup independent panel collapse controls
+      setupCollapsible('btn-toggle-header', 'header-content', 'header-toggle-icon', 'header-panel');
+      setupCollapsible('btn-toggle-control', 'control-content', 'control-toggle-icon', 'control-panel');
+      setupCollapsible('btn-toggle-legend', 'legend-content', 'legend-toggle-icon', 'legend-panel');
+      setupCollapsible('btn-toggle-sidebar', 'sidebar-content', 'sidebar-toggle-icon', 'sidebar-panel');
+      setupCollapsible('btn-toggle-detail', 'detail-content', 'detail-toggle-icon', 'detail-panel');
+
+      // GLOBAL MINIMIZE ALL / RESTORE TOGGLE
+      let globalAllMinimized = false;
+      const btnMinimizeAll = document.getElementById('btn-minimize-all');
+      const textMinimizeAll = document.getElementById('text-minimize-all');
+
+      function updateGlobalMinimizeButtonState() {
+        const allCollapsed = Array.from(panelsState.values()).every(v => v === true);
+        globalAllMinimized = allCollapsed;
+        if (globalAllMinimized) {
+          textMinimizeAll.textContent = "Restaurar Interfaz";
+        } else {
+          textMinimizeAll.textContent = "Minimizar Todo";
+        }
+      }
+
+      btnMinimizeAll.addEventListener('click', () => {
+        globalAllMinimized = !globalAllMinimized;
+        setPanelCollapsed('header-content', 'header-toggle-icon', globalAllMinimized, document.getElementById('header-panel'));
+        setPanelCollapsed('control-content', 'control-toggle-icon', globalAllMinimized, document.getElementById('control-panel'));
+        setPanelCollapsed('legend-content', 'legend-toggle-icon', globalAllMinimized, document.getElementById('legend-panel'));
+        setPanelCollapsed('sidebar-content', 'sidebar-toggle-icon', globalAllMinimized, document.getElementById('sidebar-panel'));
+        setPanelCollapsed('detail-content', 'detail-toggle-icon', globalAllMinimized, document.getElementById('detail-panel'));
+        
+        updateGlobalMinimizeButtonState();
+      });
+
+      // Range Selector (200m / 1000m)
+      const btnRange200 = document.getElementById('btn-range-200');
+      const btnRange1000 = document.getElementById('btn-range-1000');
+      const legendRangeText = document.getElementById('legend-range-text');
+
+      function setRadarRange(meters) {
+        SCAN_RADIUS_METERS = meters;
+        scanCircle.setRadius(meters);
+        legendRangeText.textContent = `${meters}m`;
+
+        if (meters === 200) {
+          btnRange200.className = "px-2 py-0.5 text-[10px] rounded border border-emerald-500/40 bg-emerald-500/20 text-emerald-300 font-bold";
+          btnRange1000.className = "px-2 py-0.5 text-[10px] rounded border border-cyan-500/30 bg-cyan-950/40 text-cyan-300 font-semibold hover:bg-cyan-900/50";
+          map.setZoom(17);
+        } else {
+          btnRange1000.className = "px-2 py-0.5 text-[10px] rounded border border-emerald-500/40 bg-emerald-500/20 text-emerald-300 font-bold";
+          btnRange200.className = "px-2 py-0.5 text-[10px] rounded border border-cyan-500/30 bg-cyan-950/40 text-cyan-300 font-semibold hover:bg-cyan-900/50";
+          map.setZoom(15);
+        }
+        renderShipsUI();
+      }
+
+      btnRange200.addEventListener('click', () => setRadarRange(200));
+      btnRange1000.addEventListener('click', () => setRadarRange(1000));
+
+      // Console & sound action bindings
       document.getElementById('btn-clear-logs').addEventListener('click', () => {
         logConsole.innerHTML = '<div class="text-slate-500">> Logs limpiados. Listo.</div>';
       });
 
-      // Bind manual reconnection button
       document.getElementById('btn-reconnect').addEventListener('click', connectLiveWebsocket);
 
-      // Sound mute toggle button action
       const muteBtn = document.getElementById('btn-toggle-mute');
       muteBtn.addEventListener('click', () => {
         audioMuted = !audioMuted;
@@ -841,7 +859,6 @@
           muteBtn.textContent = 'Radar Silencioso';
           muteBtn.className = 'flex items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 hover:text-white px-3 py-2 font-semibold text-slate-300 transition-all-300 active:scale-95';
         } else {
-          // Initialize audio context on user gesture
           if (audioCtx.state === 'suspended') {
             audioCtx.resume();
           }
@@ -851,9 +868,9 @@
         }
       });
 
-      // Periodic check for dead/stale ship signals
+      // Cleanup stale ships (silent for >30s)
       setInterval(() => {
-        const staleThreshold = Date.now() - 30000; // 30 seconds since last AIS packet
+        const staleThreshold = Date.now() - 30000;
         let deletedAny = false;
         shipsMap.forEach((ship, mmsi) => {
           if (ship.lastUpdated < staleThreshold) {
@@ -867,8 +884,7 @@
         }
       }, 5000);
 
-      // --- INITIAL STARTUP ---
-      // Launch connection immediately and completely automatically on load
+      // Start connection immediately
       connectLiveWebsocket();
 
     </script>
